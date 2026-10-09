@@ -1,59 +1,78 @@
-# HEIMDALL TECH — Backend API
+# Heimdall Tech Backend
 
-API **Django REST Framework** sobre MySQL (`heimdall_tech`). Los modelos usan `managed = False`: el esquema oficial está en `../Heimdall_Tech.sql`.
+## 1. Descripción general
 
-## Capas del backend (requisito académico)
+Heimdall Tech es una plataforma de gestión y control de acceso vehicular orientada a un modelo SaaS multi-establecimiento. La solución está diseñada para que cada empresa o establecimiento pueda operar de forma aislada, sin acceder a la información de otras organizaciones.
 
-| Capa | Ubicación | Función |
-|------|-----------|---------|
-| **Models** | `app_*/models.py` | Mapeo ORM → tablas MySQL (`PLAN`, `USUARIO`, `MOVIMIENTO`, …) |
-| **Serializers** | `app_*/serializers.py` | JSON, relaciones anidadas, ocultar datos sensibles (`password_hash`) |
-| **Views** | `app_*/views.py` | ViewSets REST (list/retrieve) → respuesta JSON |
-| **URLs** | `app_*/urls.py` + `config/urls.py` | Rutas que consume el frontend |
+El backend está desarrollado con Django y Django REST Framework, conectado a una base de datos MySQL y expone una API REST para uso por un frontend web o móvil.
 
-### Apps y tablas
+El sistema contempla:
 
-| App | Modelos (tabla SQL) |
-|-----|---------------------|
-| `app_empresas` | `Plan` → PLAN, `Establecimiento` → ESTABLECIMIENTO |
-| `app_identidad` | `Rol` → ROL, `Usuario` → USUARIO |
-| `app_operaciones` | `Responsable`, `Vehiculo`, `Movimiento`, `Incidencia` |
-| `app_inteligencia` | `ReconocimientoPlaca` → RECONOCIMIENTO_PLACA |
+- gestión de planes y establecimientos
+- administración de usuarios por empresa
+- control de accesos, movimientos vehiculares y responsables
+- manejo de incidencias y alertas
+- reconocimiento de placas con inteligencia artificial
+- seguridad por JWT por usuario
+- segregación de datos por `id_establecimiento`
 
-## Instalación
+## 2. Objetivos del sistema
 
-Este documento explica paso a paso cómo iniciar el backend de `Heimdall Tech`, preparar la base de datos MySQL real y dejar el proyecto listo para trabajar.
+- Gestionar planes y clientes empresariales.
+- Administrar establecimientos y usuarios asociados.
+- Controlar responsables, vehículos, movimientos y incidencias.
+- Mantener una arquitectura escalable y multi-tenant.
+- Proveer APIs para integración frontend.
+- Implementar autenticación segura y permisos por rol.
 
-### 1. Requisitos previos
-
-Necesitas tener instalado:
+## 3. Stack tecnológico
 
 - Python 3.12+
-- MySQL Server 8.0+
+- Django 5.x
+- Django REST Framework
+- MySQL 8+
+- djangorestframework-simplejwt
+- django-cors-headers
+- python-dotenv
+
+## 4. Requisitos previos
+
+Antes de iniciar el backend debes tener instalado:
+
+- Python 3.12 o superior
+- MySQL Server 8 o superior
 - Git
-- Navegador web
-- PowerShell o terminal de comandos
+- PowerShell o terminal equivalente
+- Navegador web para probar endpoints y admin
 
-### 2. Estructura del proyecto
+## 5. Estructura del proyecto
 
-El proyecto está dividido así:
+```text
+Heimdall_Tech/
+├── Heimdall_Tech.sql
+├── backend/
+│   ├── .env
+│   ├── .venv/
+│   ├── manage.py
+│   ├── requirements.txt
+│   ├── README.md
+│   ├── app_empresas/
+│   ├── app_identidad/
+│   ├── app_operaciones/
+│   ├── app_inteligencia/
+│   └── config/
+└── ENLACES_RAPIDOS.md
+```
 
-- `backend/` → proyecto Django
-- `Heimdall_Tech.sql` → script SQL con la estructura y datos base
-- `backend/.env` → variables de entorno
-- `backend/.venv/` → entorno virtual
+## 6. Preparación de la base de datos MySQL
 
-### 3. Preparar la base de datos MySQL
+Antes de levantar Django, debes ejecutar el script SQL principal localizado en la raíz del proyecto:
 
-Antes de levantar Django, debes crear/activar la base de datos real con el script SQL del proyecto.
+```text
+Heimdall_Tech.sql
+```
 
-#### 3.1 Ubicación del script SQL
-
-En la raíz del proyecto encontrarás:
-
-- `Heimdall_Tech.sql`
-
-Ese archivo crea la base de datos `heimdall_tech` y las tablas:
+Este archivo crea la base de datos `heimdall_tech` y las tablas necesarias para el sistema:
 
 - `PLAN`
 - `ESTABLECIMIENTO`
@@ -65,45 +84,33 @@ Ese archivo crea la base de datos `heimdall_tech` y las tablas:
 - `RECONOCIMIENTO_PLACA`
 - `INCIDENCIA`
 
-#### 3.2 Ejecutar el SQL
+### Forma de ejecución
 
-Opción 1: desde MySQL Workbench
+#### Opción A: MySQL Workbench
 
-1. Abre MySQL Workbench
-2. Conéctate a MySQL
-3. Abre `Heimdall_Tech.sql`
-4. Ejecuta el script completo
+1. Abrir MySQL Workbench.
+2. Conectarse a MySQL.
+3. Cargar el archivo `Heimdall_Tech.sql`.
+4. Ejecutar el script completo.
 
-Opción 2: desde terminal (PowerShell)
+#### Opción B: PowerShell
 
 ```powershell
 cd "C:\Users\Ian de Jesus\Documents\Heimdall_Tech\Heimdall_Tech"
 mysql -u root -p
 ```
 
-Luego dentro de MySQL:
+Dentro de MySQL:
 
 ```sql
 SOURCE C:/Users/Ian de Jesus/Documents/Heimdall_Tech/Heimdall_Tech/Heimdall_Tech.sql;
 ```
 
-O si prefieres usar el comando directo en PowerShell:
+> Importante: este paso es obligatorio antes de iniciar Django, porque el proyecto usa tablas reales y no depende de migraciones automáticas para la lógica principal del negocio.
 
-```powershell
-Get-Content "C:\Users\Ian de Jesus\Documents\Heimdall_Tech\Heimdall_Tech\Heimdall_Tech.sql" | mysql -u root -p
-```
+## 7. Configuración del entorno
 
-> Importante: este script debe ejecutarse antes de iniciar Django, porque el proyecto usa modelos con `managed = False` y la base de datos real ya está definida en SQL.
-
-### 4. Configurar las variables de entorno
-
-Entra a:
-
-```text
-backend/.env
-```
-
-Y asegúrate de que tenga algo como esto:
+El archivo `backend/.env` debe tener una configuración similar a esta:
 
 ```env
 DJANGO_SECRET_KEY=change-me-in-production
@@ -117,9 +124,9 @@ DB_HOST=127.0.0.1
 DB_PORT=3306
 ```
 
-> En producción se recomienda cambiar esta configuración por valores seguros.
+> En producción se recomienda cambiar valores sensibles por secretos reales y usar HTTPS.
 
-### 5. Crear e iniciar el entorno virtual
+## 8. Crear entorno virtual
 
 Desde la carpeta `backend`:
 
@@ -129,70 +136,125 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-### 6. Instalar dependencias
+## 9. Instalar dependencias
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-### 7. Verificar y compilar traducciones
-
-```powershell
-python manage.py check
-pybabel compile -d locale -D django
-```
-
-### 8. Confirmar que la conexión a MySQL funciona
+## 10. Verificar conexión y configuración
 
 ```powershell
 python manage.py check
 ```
 
-Si no hay errores, la configuración está correcta y la base de datos está lista.
+Si todo está bien, el comando debe devolver:
 
-### 9. Iniciar el servidor Django
+```text
+System check identified no issues (0 silenced).
+```
+
+## 11. Iniciar el backend
 
 ```powershell
 python manage.py runserver 8000
 ```
 
-Luego abre en el navegador:
+La aplicación quedará disponible en:
 
 - http://127.0.0.1:8000/
 - http://127.0.0.1:8000/admin/
 - http://127.0.0.1:8000/api/
 
-### 10. Crear usuarios admin (si hace falta)
+## 12. Autenticación JWT por usuario
 
-```powershell
-python manage.py createsuperuser
-```
+El sistema usa JWT para autenticar a cada usuario de forma individual.
 
-Ejemplo usado en el proyecto:
+Cada inicio de sesión genera un token propio, con información del usuario, su rol y su establecimiento.
 
-- Usuario: `IanLR`
-- Correo: `ian99090@gmail.com`
-- Contraseña: `miacarola2004`
-
-Y también:
-
-- Usuario: `rastor65`
-- Correo: `rdamianquintero@uniguajira.edu.co`
-- Contraseña: `123456789`
-
-### 11. ¿Qué pasa si no ejecutas el SQL antes?
-
-Si no ejecutas `Heimdall_Tech.sql` primero, Django no encontrará las tablas reales y la API no podrá consultar información real del sistema.
-
-Por eso este proyecto usa la base de datos relacional real como fuente principal y no depende solo del ORM en vacío.
-
-### 12. URLs principales del proyecto
-
-### Panel administrativo
+### Endpoint de login
 
 ```text
-http://127.0.0.1:8000/admin/
+http://127.0.0.1:8000/api/identidad/auth/login/
 ```
+
+Ejemplo de petición JSON:
+
+```json
+{
+  "username": "IanLR",
+  "password": "miacarola2004"
+}
+```
+
+### Endpoint de refresh
+
+```text
+http://127.0.0.1:8000/api/identidad/auth/refresh/
+```
+
+Ejemplo:
+
+```json
+{
+  "refresh": "<refresh_token>"
+}
+```
+
+### Token generado
+
+El JWT incluye información útil para controlar permisos y contexto empresarial:
+
+- `user_id`
+- `username`
+- `email`
+- `is_staff`
+- `is_superuser`
+- `id_establecimiento`
+- `rol`
+- `rol_id`
+
+Esto permite que el sistema sepa exactamente:
+
+- quién es el usuario autenticado
+- a qué empresa o establecimiento pertenece
+- qué permisos tiene según su rol
+
+## 13. Modelo SaaS / multi-establecimiento
+
+La arquitectura del proyecto está pensada para un SaaS multi-clientes o multi-establecimientos.
+
+Por este motivo, las consultas de negocio requieren el parámetro `id_establecimiento` para evitar fugas de información entre clientes.
+
+### Ejemplos correctos
+
+```text
+http://127.0.0.1:8000/api/identidad/usuarios/?id_establecimiento=1
+http://127.0.0.1:8000/api/operaciones/vehiculos/?id_establecimiento=1
+http://127.0.0.1:8000/api/operaciones/responsables/?id_establecimiento=1
+http://127.0.0.1:8000/api/inteligencia/reconocimientos/?id_establecimiento=3
+```
+
+### Regla de negocio
+
+- Un usuario solo debe ver información de su establecimiento.
+- Un administrador de empresa no puede ver información de otra empresa.
+- Un superadmin puede tener acceso global, según la estrategia de permisos de la solución.
+
+## 14. Permisos por rol
+
+El sistema está pensado para diferenciar roles de acceso.
+
+### Roles conceptuales
+
+- `Superadmin`: acceso global y administrativo completo
+- `Administrador`: gestión del establecimiento al que pertenece
+- `Vigilante`: operaciones restringidas de validación y control
+- `Supervisor`: revisión y reportes
+
+La idea es que el token lleve el `rol` y el `id_establecimiento`, para filtrar los datos desde el backend.
+
+## 15. Endpoints principales
 
 ### API base
 
@@ -200,74 +262,105 @@ http://127.0.0.1:8000/admin/
 http://127.0.0.1:8000/api/
 ```
 
-### Endpoints principales
+### Empresas
 
 ```text
 http://127.0.0.1:8000/api/empresas/planes/
 http://127.0.0.1:8000/api/empresas/establecimientos/?id_establecimiento=1
+```
 
+### Identidad
+
+```text
 http://127.0.0.1:8000/api/identidad/roles/
 http://127.0.0.1:8000/api/identidad/usuarios/?id_establecimiento=1
+http://127.0.0.1:8000/api/identidad/auth/login/
+http://127.0.0.1:8000/api/identidad/auth/refresh/
+```
 
+### Operaciones
+
+```text
 http://127.0.0.1:8000/api/operaciones/responsables/?id_establecimiento=1
 http://127.0.0.1:8000/api/operaciones/vehiculos/?id_establecimiento=1
 http://127.0.0.1:8000/api/operaciones/movimientos/?id_establecimiento=1
 http://127.0.0.1:8000/api/operaciones/incidencias/?id_establecimiento=1
+```
 
+### Inteligencia
+
+```text
 http://127.0.0.1:8000/api/inteligencia/reconocimientos/?id_establecimiento=3
 ```
 
-## 13. Nota importante sobre el diseño SaaS
-
-Los módulos operativos exigen el parámetro:
+### Meta
 
 ```text
-?id_establecimiento=1
+http://127.0.0.1:8000/api/meta/idiomas/
+http://127.0.0.1:8000/api/meta/catalogo-enums/
 ```
 
-Esto es correcto y está pensado para que cada cliente/establecimiento vea solo su información, evitando que un usuario vea datos de otro establecimiento.
+## 16. Usuarios de demostración
 
-## 14. Resumen rápido
+En el proyecto existen usuarios de prueba que pueden usar el sistema en entorno local.
 
-Para iniciar el backend correctamente:
+Ejemplos:
+
+- `IanLR`
+- `rastor65`
+
+## 17. Recomendaciones de seguridad para producción
+
+Para una versión real de producción, se recomienda:
+
+- usar JWT con expiración corta
+- usar refresh tokens con rotación
+- habilitar HTTPS
+- proteger variables de entorno con secretos reales
+- restringir accesos por rol y por establecimiento
+- validar permisos en cada endpoint de negocio
+- usar un sistema de logs y auditoría
+
+## 18. Buenas prácticas del proyecto
+
+- mantener la separación por apps (`empresas`, `identidad`, `operaciones`, `inteligencia`)
+- no exponer información sensible como `password_hash`
+- filtrar por `id_establecimiento` en consultas del negocio
+- usar JWT para autenticar usuarios sin depender de sesiones del navegador
+- manejar roles explícitos para permisos y acceso a recursos
+
+## 19. Flujo recomendado para arrancar el proyecto
 
 ```powershell
 cd "C:\Users\Ian de Jesus\Documents\Heimdall_Tech\Heimdall_Tech"
-mysql -u root -p
-# ejecutar Heimmall_Tech.sql
 
+# 1. Ejecutar la BD SQL
+# Abrir y correr Heimdall_Tech.sql desde MySQL
+
+# 2. Entrar a backend
 cd backend
-python -m venv .venv
+
+# 3. Activar entorno virtual
 .\.venv\Scripts\Activate.ps1
+
+# 4. Instalar dependencias
 pip install -r requirements.txt
+
+# 5. Validar proyecto
 python manage.py check
+
+# 6. Iniciar servidor
 python manage.py runserver 8000
 ```
 
-## 15. Recomendación final
+## 20. Conclusión
 
-Si vas a presentar el proyecto o a entregarlo a otra persona, primero activa el script SQL y luego arranca Django. Así te aseguras de que el backend está conectado con la base de datos real y no con un esquema vacío.
+Heimdall Tech ya está preparado para una arquitectura profesional de backend empresarial, con:
 
-## Multi-cliente (SaaS)
+- autenticación JWT individual por usuario
+- trazabilidad por usuario, rol y establecimiento
+- segmentación de datos por empresa o establecimiento
+- API REST para integración con frontend
+- base de datos relacional con esquema real en MySQL
 
-Listados y detalle operativos exigen el query param **`id_establecimiento`**:
-
-`GET /api/operaciones/movimientos/?id_establecimiento=3`
-
-`GET /api/operaciones/movimientos/42/?id_establecimiento=3`
-
-Filtros adicionales: `?search=ABC123`, `?ordering=-fecha_evento`.
-
-## Multilingüe (es / en)
-
-- Configuración: `config/settings.py` (`LANGUAGES`, `LocaleMiddleware`)
-- Traducciones: `locale/es`, `locale/en` (compilar con `pybabel compile -d locale -D django`)
-- Cliente envía cabecera: `Accept-Language: es` o `Accept-Language: en`
-- Enums y choices devuelven campo `*_etiqueta` traducido en serializers
-- Catálogo de valores: `GET /api/meta/catalogo-enums/`
-
-## Seguridad en serializers
-
-- `Usuario`: no expone `password_hash`
-- `UsuarioResumenSerializer`: usado en vistas anidadas (movimientos, incidencias, IA)
-- Detalle (`retrieve`) incluye relaciones `vehiculo`, `usuario`, `movimiento` según módulo
+Esto responde a una estructura de software más orientada a producción, a negocio y a posible venta o despliegue empresarial.
