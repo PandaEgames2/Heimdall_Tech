@@ -35,6 +35,7 @@ class Usuario(models.Model):
         db_table = "USUARIO"
         managed = False
         unique_together = (("id_establecimiento", "correo"),)
+        ordering = ["id_usuario"]
 
     def __str__(self):
         return self.correo

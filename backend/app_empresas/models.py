@@ -36,6 +36,7 @@ class Establecimiento(models.Model):
     class Meta:
         db_table = "ESTABLECIMIENTO"
         managed = False
+        ordering = ["id_establecimiento"]
 
     def __str__(self):
         return self.nombre
