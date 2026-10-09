@@ -1,0 +1,55 @@
+msgid ""
+msgstr ""
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Authorized"
+msgstr "Autorizado"
+
+msgid "Visitor"
+msgstr "Visitante"
+
+msgid "Restricted"
+msgstr "Restringido"
+
+msgid "Entry"
+msgstr "Ingreso"
+
+msgid "Exit"
+msgstr "Salida"
+
+msgid "Pending"
+msgstr "Pendiente"
+
+msgid "Synchronized"
+msgstr "Sincronizado"
+
+msgid "Low"
+msgstr "Baja"
+
+msgid "Medium"
+msgstr "Media"
+
+msgid "High"
+msgstr "Alta"
+
+msgid "Critical"
+msgstr "Crítica"
+
+msgid "Match"
+msgstr "Coincide"
+
+msgid "No match"
+msgstr "No coincide"
+
+msgid "Alert"
+msgstr "Alerta"
+
+msgid "Required for multi-tenant queries (SaaS)."
+msgstr "Requerido para consultas multi-cliente (SaaS)."
+
+msgid "Must be a valid integer."
+msgstr "Debe ser un entero válido."
+
+msgid "Operational lists require query param id_establecimiento."
+msgstr "Los listados operativos requieren el parámetro id_establecimiento."
