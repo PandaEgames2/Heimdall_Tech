@@ -353,14 +353,4 @@ python manage.py check
 python manage.py runserver 8000
 ```
 
-## 20. Conclusión
 
-Heimdall Tech ya está preparado para una arquitectura profesional de backend empresarial, con:
-
-- autenticación JWT individual por usuario
-- trazabilidad por usuario, rol y establecimiento
-- segmentación de datos por empresa o establecimiento
-- API REST para integración con frontend
-- base de datos relacional con esquema real en MySQL
-
-Esto responde a una estructura de software más orientada a producción, a negocio y a posible venta o despliegue empresarial.
