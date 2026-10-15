@@ -2,10 +2,11 @@ from django.contrib import admin
 from django.urls import include, path
 
 from app_identidad.views import PerfilUsuarioView
-from .views import ApiIndexView, CatalogoEnumsView, IdiomasMetaView
+from .views import ApiHealthView, ApiIndexView, CatalogoEnumsView, IdiomasMetaView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/health/", ApiHealthView.as_view(), name="api-health"),
     path("api/", ApiIndexView.as_view(), name="api-index"),
     path("api/profile/", PerfilUsuarioView.as_view(), name="api-profile"),
     path("api/meta/idiomas/", IdiomasMetaView.as_view(), name="api-meta-idiomas"),

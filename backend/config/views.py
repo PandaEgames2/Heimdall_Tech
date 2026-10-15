@@ -1,7 +1,31 @@
 from django.conf import settings
+from django.db import connection
 from django.utils.translation import get_language, gettext as _
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+
+class ApiHealthView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                db_ok = True
+        except Exception:
+            db_ok = False
+
+        return Response(
+            {
+                "status": "ok" if db_ok else "degraded",
+                "database": "online" if db_ok else "offline",
+                "project": "Heimdall Tech API",
+                "environment": "development" if settings.DEBUG else "production",
+                "version": "1.0.0",
+            }
+        )
 
 
 class ApiIndexView(APIView):
@@ -24,6 +48,7 @@ class ApiIndexView(APIView):
                     "urls": "backend/app_*/urls.py + config/urls.py",
                 },
                 "endpoints": {
+                    "health": "/api/health/",
                     "empresas": {
                         "planes": "/api/empresas/planes/",
                         "establecimientos": "/api/empresas/establecimientos/",
@@ -31,6 +56,8 @@ class ApiIndexView(APIView):
                     "identidad": {
                         "roles": "/api/identidad/roles/",
                         "usuarios": "/api/identidad/usuarios/?id_establecimiento={id}",
+                        "login": "/api/identidad/auth/login/",
+                        "refresh": "/api/identidad/auth/refresh/",
                     },
                     "operaciones": {
                         "responsables": "/api/operaciones/responsables/?id_establecimiento={id}",
