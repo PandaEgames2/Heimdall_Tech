@@ -1,6 +1,5 @@
 from rest_framework import viewsets
 
-from .mixins import EstablecimientoQueryParamMixin
 from .models import Incidencia, Movimiento, Responsable, Vehiculo
 from .serializers import (
     IncidenciaDetalleSerializer,
@@ -10,9 +9,10 @@ from .serializers import (
     ResponsableSerializer,
     VehiculoSerializer,
 )
+from config.mixins import EstablecimientoQueryParamMixin
 
 
-class ResponsableViewSet(EstablecimientoQueryParamMixin, viewsets.ReadOnlyModelViewSet):
+class ResponsableViewSet(EstablecimientoQueryParamMixin, viewsets.ModelViewSet):
     serializer_class = ResponsableSerializer
     lookup_field = "id_responsable"
     search_fields = ("nombre", "documento_identidad", "correo")
@@ -22,7 +22,7 @@ class ResponsableViewSet(EstablecimientoQueryParamMixin, viewsets.ReadOnlyModelV
         return Responsable.objects.all().order_by("nombre")
 
 
-class VehiculoViewSet(EstablecimientoQueryParamMixin, viewsets.ReadOnlyModelViewSet):
+class VehiculoViewSet(EstablecimientoQueryParamMixin, viewsets.ModelViewSet):
     serializer_class = VehiculoSerializer
     lookup_field = "id_vehiculo"
     search_fields = ("placa", "marca", "modelo", "color")
@@ -32,7 +32,7 @@ class VehiculoViewSet(EstablecimientoQueryParamMixin, viewsets.ReadOnlyModelView
         return Vehiculo.objects.select_related("id_responsable").order_by("placa")
 
 
-class MovimientoViewSet(EstablecimientoQueryParamMixin, viewsets.ReadOnlyModelViewSet):
+class MovimientoViewSet(EstablecimientoQueryParamMixin, viewsets.ModelViewSet):
     lookup_field = "id_movimiento"
     search_fields = ("placa_leida", "id_dispositivo", "observacion")
     ordering_fields = ("fecha_evento", "tipo_movimiento", "estado_sincronizacion")
@@ -48,7 +48,7 @@ class MovimientoViewSet(EstablecimientoQueryParamMixin, viewsets.ReadOnlyModelVi
         ).order_by("-fecha_evento")
 
 
-class IncidenciaViewSet(EstablecimientoQueryParamMixin, viewsets.ReadOnlyModelViewSet):
+class IncidenciaViewSet(EstablecimientoQueryParamMixin, viewsets.ModelViewSet):
     lookup_field = "id_incidencia"
     search_fields = ("titulo", "descripcion", "nivel_prioridad")
     ordering_fields = ("fecha_incidencia", "nivel_prioridad")

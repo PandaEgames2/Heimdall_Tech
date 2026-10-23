@@ -39,15 +39,18 @@ class PerfilUsuarioView(APIView):
         return Response(payload, status=status.HTTP_200_OK)
 
 
-class RolViewSet(viewsets.ReadOnlyModelViewSet):
+class RolViewSet(EstablecimientoQueryParamMixin, viewsets.ModelViewSet):
     queryset = Rol.objects.all().order_by("nombre")
     serializer_class = RolSerializer
     lookup_field = "id_rol"
     search_fields = ("nombre", "descripcion")
     ordering_fields = ("nombre",)
 
+    def get_base_queryset(self):
+        return Rol.objects.all().order_by("nombre")
 
-class UsuarioViewSet(EstablecimientoQueryParamMixin, viewsets.ReadOnlyModelViewSet):
+
+class UsuarioViewSet(EstablecimientoQueryParamMixin, viewsets.ModelViewSet):
     serializer_class = UsuarioSerializer
     lookup_field = "id_usuario"
     search_fields = ("nombre", "correo")
@@ -55,3 +58,11 @@ class UsuarioViewSet(EstablecimientoQueryParamMixin, viewsets.ReadOnlyModelViewS
 
     def get_base_queryset(self):
         return Usuario.objects.filter(estado=True).select_related("id_rol", "id_establecimiento")
+
+    def create(self, request, *args, **kwargs):
+        payload = request.data.copy()
+        if "id_establecimiento" not in payload and request.user.is_authenticated:
+            perfil = Usuario.objects.filter(correo__iexact=request.user.email.lower()).first()
+            if perfil:
+                payload["id_establecimiento"] = perfil.id_establecimiento_id
+        return super().create(request, *args, **kwargs)

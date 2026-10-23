@@ -437,6 +437,8 @@ El enfoque actual es claro:
 - se puede clonar desde GitHub y configurar en otra PC
 - la documentación y dependencias están alineadas con lo que realmente existe en el proyecto
 
+> Guía rápida de arranque: `GUÍA_DE_ARRANQUE_5_MINUTOS.md`
+
 ## 19. Comandos rápidos
 
 ```powershell

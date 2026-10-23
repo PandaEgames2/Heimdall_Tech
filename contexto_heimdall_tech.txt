@@ -1,0 +1,64 @@
+=============================================================================
+CONTEXTO GLOBAL DEL PROYECTO: HEIMDALL TECH
+Documento de inicialización para Asistente de IA (VS Code)
+=============================================================================
+
+1. DESCRIPCIÓN GENERAL DEL SOFTWARE
+HEIMDALL TECH es un sistema inteligente de control, registro y trazabilidad vehicular diseñado bajo una arquitectura Multi-Tenant (SaaS). Su propósito es digitalizar y automatizar el control de acceso en conjuntos residenciales, universidades, empresas y centros logísticos. Se enfoca en resolver los problemas de seguridad, lentitud y falta de trazabilidad en las porterías, combinando interfaces móviles ligeras para vigilantes con un potente panel web para administradores y un motor de Inteligencia Artificial (Visión por Computador) para el reconocimiento automático de placas.
+
+2. MISIÓN Y VISIÓN
+* Misión: Proveer una plataforma tecnológica accesible, segura y eficiente que optimice el control, registro y trazabilidad de vehículos en diversos establecimientos, facilitando la labor operativa y brindando datos confiables a la administración.
+* Visión: Posicionar a HEIMDALL TECH como la solución SaaS líder en control de acceso vehicular a nivel nacional, destacando por su adaptabilidad a dispositivos de bajos recursos (offline-first) y su innovación en automatización.
+
+3. OBJETIVOS DEL SISTEMA
+* General: Desarrollar un sistema inteligente y multiplataforma para gestionar ingresos, salidas, historiales y autorizaciones de manera estructurada y comercializable.
+* Específicos:
+  1. Diseñar una app (Android/PWA) offline-first para vigilantes con interfaces sencillas.
+  2. Construir un backend administrativo Multi-Tenant con control estricto de roles.
+  3. Integrar un módulo de Visión por Computador / IA (OCR/LPR) para leer placas desde fotos/video.
+  4. Implementar sincronización en segundo plano para tolerancia a fallos de red.
+
+4. MODELO DE NEGOCIO (SaaS)
+El sistema está diseñado para venderse en 3 planes:
+* Plan Básico: Gestión manual, soporte offline y autogestión de residentes con códigos QR.
+* Plan Medio: Integración IoT con etiquetas RFID y antenas para apertura semiautomática.
+* Plan Avanzado: Integración de cámaras LPR fijas y procesamiento por Inteligencia Artificial para autonomía total sin intervención del vigilante.
+
+5. ARQUITECTURA TÉCNICA (STACK ESTABLECIDO)
+* Backend: Python + Django.
+* API REST: Django REST Framework (DRF).
+* Base de Datos: MySQL (Relacional, 9 tablas optimizadas).
+* Frontend: App Móvil (Vigilante) / Web Dashboard (Administrador) - Se consumirá vía API JSON.
+* Otros requisitos: Soporte Multilingüe (i18n) configurado en Django (Español/Inglés).
+
+6. ESTADO ACTUAL DEL PROYECTO (LO QUE YA SE HA HECHO)
+* Rediseño de Base de Datos: Se optimizó una base de datos de 15 tablas a 9 tablas de alto rendimiento.
+* Unificación de Movimientos: Se eliminaron las tablas separadas de "Ingresos" y "Salidas". Ahora existe una única tabla `MOVIMIENTO` con el campo `tipo_movimiento`.
+* Aislamiento de Datos (Habeas Data): Se implementó la clave foránea `id_establecimiento` en todas las tablas principales para aislar a los clientes Multi-Tenant.
+* Población de Datos (Seed): La base de datos MySQL ya cuenta con 100 registros de prueba distribuidos en 4 establecimientos (simulando clientes SaaS reales).
+* Configuración de Django: Se creó el proyecto base (`heimdall_backend`), se configuró la conexión a MySQL, se activó el middleware de idiomas (`LocaleMiddleware`) y se aplicó ingeniería inversa (`inspectdb`) para generar el archivo `models.py`.
+
+7. ESTRUCTURA DE LA BASE DE DATOS (9 TABLAS EN MYSQL)
+1. `PLAN`: Tipos de suscripción (Básico, Medio, Avanzado).
+2. `ESTABLECIMIENTO`: Clientes del SaaS (Conjuntos, Empresas). Todo registro cuelga de aquí.
+3. `ROL`: Permisos y niveles de acceso (Admin, Vigilante, etc.).
+4. `USUARIO`: Operadores del sistema. Incluye campo `idioma` ('es'/'en') para i18n.
+5. `RESPONSABLE`: Personas dueñas de vehículos (Residentes, empleados). Aislados por establecimiento.
+6. `VEHICULO`: Carros registrados. Tiene UNIQUE KEY (`id_establecimiento`, `placa`). Incluye `tipo_autorizacion`.
+7. `MOVIMIENTO`: El núcleo operativo. Registra Entradas y Salidas. Incluye campos vitales para soporte offline: `id_dispositivo`, `estado_sincronizacion` y `fecha_sincronizacion`. Permite `id_vehiculo` NULO para registrar placas de visitantes no registrados (`placa_leida`).
+8. `RECONOCIMIENTO_PLACA`: Módulo IA. Guarda fotos, placa detectada, índice de confianza y resultado comparativo. Independiente del movimiento.
+9. `INCIDENCIA`: Registro de anomalías operativas o de seguridad.
+
+8. ESTRUCTURA DEL BACKEND (DJANGO MODULAR)
+El backend está dividido en 4 módulos lógicos (Apps) para facilitar su mantenimiento:
+* `app_empresas`: Gestiona los modelos ESTABLECIMIENTO y PLAN.
+* `app_identidad`: Gestiona USUARIO y ROL (Autenticación e Idiomas).
+* `app_operaciones`: Gestiona RESPONSABLE, VEHICULO, MOVIMIENTO e INCIDENCIA.
+* `app_inteligencia`: Gestiona RECONOCIMIENTO_PLACA.
+
+9. DIRECTRICES INMEDIATAS PARA LA IA ASISTENTE
+IA, al leer este documento, ten en cuenta que el próximo paso lógico en el código es consolidar el modelo MVT + DRF.
+* Tarea prioritaria: Crear los `serializers.py`, `views.py` (usando `ModelViewSet`) y `urls.py` (usando `DefaultRouter`) para las 4 aplicaciones mencionadas.
+* Regla estricta: Siempre mantener el paradigma "Multi-Tenant" en los QuerySets (ej. filtrar movimientos por el establecimiento del usuario autenticado).
+* Regla estricta: Mantener en cuenta la internacionalización (`gettext_lazy`) al generar respuestas de error o etiquetas de modelos.
+=============================================================================
