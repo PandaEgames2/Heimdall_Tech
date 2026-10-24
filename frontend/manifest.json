@@ -3,7 +3,14 @@
   "short_name": "Heimdall",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#0d1b2a",
-  "theme_color": "#0d1b2a",
-  "icons": []
+  "background_color": "#071722",
+  "theme_color": "#071722",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ]
 }

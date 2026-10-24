@@ -106,6 +106,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = "media/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
@@ -140,8 +142,8 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
     "AUTH_HEADER_TYPES": ("Bearer",),
     "USER_ID_FIELD": "id",
     "USER_ID_CLAIM": "user_id",
@@ -157,7 +159,9 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://localhost:\d+$",
     r"^http://127\.0\.0\.1:\d+$",
     r"^http://0\.0\.0\.0:\d+$",
-    r"^http://192\.168\.\d+\.\d+:\d+$",
+    r"^https?://192\.168\.\d+\.\d+:\d+$",
+    r"^https?://10\.\d+\.\d+\.\d+:\d+$",
+    r"^https?://172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+:\d+$",
 ]
 CORS_ALLOW_CREDENTIALS = True
 

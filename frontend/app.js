@@ -104,20 +104,6 @@ function renderCatalogView() {
   `;
 }
 
-function renderModuleByRole() {
-  const permitted = rolePermissions[state.role];
-  if (!permitted.includes('dashboard')) {
-    document.getElementById('contentArea').innerHTML = '<article class="metric-card" style="grid-column:1 / -1; min-height:200px;"><div class="title">Sin acceso</div><div class="big" style="font-size:1.4rem;">No tienes permisos para ver este módulo.</div></article>';
-    return;
-  }
-
-  if (state.role === 'superadmin' || state.role === 'admin') {
-    renderUsersView();
-    return;
-  }
-  renderDashboard();
-}
-
 function attachEvents() {
   document.getElementById('roleSelector').addEventListener('change', (event) => {
     state.role = event.target.value;

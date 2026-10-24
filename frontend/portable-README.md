@@ -1,42 +1,29 @@
-# Heimdall Tech - Versión portable
+# Heimdall Tech — uso portable en la red local
 
-## ¿Cómo probarla desde el celular?
+“Portable” significa que se abre desde el navegador de otro dispositivo en la misma red; no es una app nativa ni un despliegue público. Para instalar el proyecto en una PC nueva, sigue el [README principal](../README.md).
 
-1. Asegúrate de que la PC y el celular estén en la misma red Wi‑Fi.
-2. Abre la terminal en la PC y levanta el backend y el frontend.
-3. En el celular entra a:
-   `http://192.168.20.24:5173`
-4. Desde el navegador del celular puedes:
-   - abrir la app en pantalla completa
-   - añadirla a la pantalla de inicio
-   - probarla como una app portable
+## Requisitos
 
-## Backend
+- PC con Heimdall, MySQL, backend y frontend instalados y activos.
+- Celular y PC conectados a la misma red Wi‑Fi.
+- Permitir los puertos `5173` (Vite) y `8000` (Django) en el firewall de Windows para la red privada.
+- Navegador actualizado.
 
-```powershell
-cd "c:\Users\Ian de Jesus\Documents\Heimdall_Tech\Heimdall_Tech\backend"
-.\.venv\Scripts\Activate.ps1
-python manage.py runserver 0.0.0.0:8000
-```
+## Abrir desde el celular
 
-## Frontend
+1. Inicia Heimdall en la PC con `iniciar.ps1`.
+2. En PowerShell, ejecuta `ipconfig` y busca la IPv4 de la red Wi‑Fi, por ejemplo `192.168.1.50`.
+3. En el celular abre `http://<IP-DE-LA-PC>:5173/`. El frontend usará esa misma IP para conectar con la API en el puerto `8000`.
+4. Inicia sesión con una cuenta de prueba descrita en el [README principal](../README.md).
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-$env:Path += ";C:\Program Files\nodejs"
-cd "c:\Users\Ian de Jesus\Documents\Heimdall_Tech\Heimdall_Tech\frontend"
-npm run dev -- --host 0.0.0.0 --port 5173
-```
+Puedes añadir la página a la pantalla de inicio desde el menú del navegador. Eso la abre en una ventana más parecida a una app, pero sigue siendo una web local.
 
-## Credenciales de prueba
+## Cámara y códigos QR
 
-```json
-{
-  "username": "admin@pinos.com",
-  "password": "hash_pass_123"
-}
-```
+El navegador permite cámara en `localhost` y en contextos HTTPS seguros. Una dirección HTTP de red local como `http://192.168.1.50:5173/` puede bloquearla. Para probar QR desde el celular, configura HTTPS en el entorno local o usa la cámara en el navegador de la PC; el residente también puede dictar su código corto y el vigilante escribirlo.
 
-## Nota importante
+## Solución de problemas
 
-La versión portable es una versión local de prueba para acceso rápido desde celular. No es un despliegue real en nube ni una app publicada en Play Store/App Store.
+- **No carga la página:** comprueba que frontend y backend estén activos y permite los puertos `5173` y `8000` en el firewall.
+- **Aparece `Failed to fetch`:** verifica que `http://<IP-DE-LA-PC>:8000/api/` responda y que el celular y la PC estén en la misma Wi‑Fi.
+- **La cámara no abre:** usa HTTPS o `localhost`, concede permiso de cámara y recarga. El ingreso manual de códigos sigue disponible.

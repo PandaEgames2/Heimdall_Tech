@@ -1,144 +1,86 @@
-# Guía de arranque en 5 minutos
+# Guía rápida para instalar Heimdall Tech
 
-Esta guía sirve para otra persona que clone el repositorio y quiera levantar el proyecto sin errores en una máquina local.
+Esta guía resume el primer arranque en una PC Windows. La primera instalación puede tardar más de cinco minutos porque descarga dependencias.
 
-## 1) Requisitos
+## Antes de empezar
 
-- Python 3.12+
-- MySQL 8+
-- Node.js 18+
-- npm
-- Git
-- PowerShell o terminal de Windows
+- Windows 10/11 de 64 bits y PowerShell.
+- Python 3.12 de 64 bits (versión de referencia para el proyecto).
+- Node.js 20.19+ o 22.12+ (incluye npm).
+- MySQL Server 8+ instalado y activo, con una cuenta que pueda crear base de datos y tablas.
+- Git para clonar el repo (opcional si recibiste una copia del código).
+- Internet para descargar paquetes y, en la primera prueba LPR, los modelos de IA.
 
-> Si PowerShell bloquea scripts, ejecuta esto antes de cualquier comando:
->
-> ```powershell
-> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-> ```
-
-## 2) Clonar el proyecto
+## 1. Obtener el código
 
 ```powershell
-git clone <url-del-repositorio>
+git clone <URL_DEL_REPOSITORIO>
 cd Heimdall_Tech
 ```
 
-## 3) Base de datos local
+Si ya tienes la carpeta, abre PowerShell en ella. Comprueba versiones con `py -3.12 --version`, `node --version` y `npm --version`.
 
-### Crear base en MySQL
+## 2. Preparar Python y las dependencias del backend
 
-```sql
-CREATE DATABASE heimdall_tech CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-```
-
-### Importar el esquema
+Desde la raíz del proyecto:
 
 ```powershell
-mysql -u root -p heimdall_tech < Heimdall_Tech.sql
+py -3.12 -m venv backend\.venv
+backend\.venv\Scripts\python.exe -m pip install --upgrade pip
+backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+Copy-Item backend\.env.example backend\.env
 ```
 
-Si prefieres hacerlo dentro de MySQL Workbench, abre `Heimdall_Tech.sql` y ejecuta el script completo.
+Edita `backend\.env` y ajusta `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` y `DB_NAME` para la instancia MySQL de esa PC. No subas `backend\.env` a GitHub. Si `mysqlclient` intenta compilarse y no encuentra dependencias, sigue la nota oficial de [instalación de mysqlclient en Windows](https://github.com/PyMySQL/mysqlclient/blob/main/README.md#install).
 
-## 4) Backend Django
+## 3. Crear el esquema inicial
+
+En una base nueva, desde la carpeta `backend`:
 
 ```powershell
 cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+.\.venv\Scripts\python.exe bootstrap_db.py --check
+.\.venv\Scripts\python.exe bootstrap_db.py --execute
+cd ..
 ```
 
-Crea el archivo `.env` dentro de `backend/`:
+`--execute` importa `Heimdall_Tech.sql`, que elimina y crea tablas funcionales: úsalo solo para una base nueva o desechable. No lo ejecutes sobre datos que quieras conservar. La cuenta de MySQL debe tener permiso `CREATE DATABASE`.
 
-```powershell
-copy .env.example .env
-```
-
-Ajusta por tus credenciales locales:
-
-```env
-DJANGO_SECRET_KEY=change-me-in-production
-DJANGO_DEBUG=True
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
-
-DB_NAME=heimdall_tech
-DB_USER=root
-DB_PASSWORD=tu_password
-DB_HOST=127.0.0.1
-DB_PORT=3306
-```
-
-Validar backend:
-
-```powershell
-python manage.py check
-```
-
-Levantar backend:
-
-```powershell
-python manage.py runserver 0.0.0.0:8000
-```
-
-La API estará en:
-
-```text
-http://127.0.0.1:8000/api/
-```
-
-## 5) Frontend React
-
-En otra terminal:
+## 4. Instalar dependencias del frontend
 
 ```powershell
 cd frontend
-npm install
-copy .env.example .env
+npm ci
+Copy-Item .env.example .env
+cd ..
 ```
 
-Archivo `.env` del frontend:
+`VITE_API_URL` puede quedar vacía para que el navegador use el backend en el mismo host, puerto `8000`.
 
-```env
-VITE_API_URL=http://127.0.0.1:8000/api
-```
+## 5. Arrancar
 
-Levantar frontend:
+Con MySQL activo y `backend\.env` configurado, ejecuta desde la raíz:
 
 ```powershell
-npm run dev -- --host 0.0.0.0
+powershell -ExecutionPolicy Bypass -File .\iniciar.ps1
 ```
 
-La app estará en:
+El script comprueba MySQL, aplica migraciones internas de Django, asegura las cuentas demo y el esquema operativo, ejecuta `manage.py check` e inicia los dos servidores. No importa el SQL destructivo.
 
-```text
-http://127.0.0.1:5173/
-```
+Abre <http://localhost:5173/>. API: <http://localhost:8000/api/>. Estado: <http://localhost:8000/api/health/>.
 
-## 6) Credenciales de prueba
+## Cuentas de demostración
 
-Usuario de prueba del backend:
+| Rol | Usuario | Contraseña |
+|---|---|---|
+| Super Admin | `admin` | `miacarola` |
+| Super Admin alternativo | `rastor36` | `miacarola` |
+| Vigilante | `vigilante@pinos.com` | `hash_pass_123` |
+| Residente | `residente@pinos.com` | `hash_pass_123` |
 
-```json
-{
-  "username": "admin@pinos.com",
-  "password": "hash_pass_123"
-}
-```
+## Si algo falla
 
-## 7) Verificación rápida
-
-- Backend: `http://127.0.0.1:8000/api/health/`
-- Login: `http://127.0.0.1:8000/api/identidad/auth/login/`
-- Frontend: `http://127.0.0.1:5173/`
-
-## 8) Importante
-
-- El proyecto está pensado para entorno local y no depende de servicios en la nube.
-- El backend usa MySQL local.
-- El frontend se conecta al backend por `VITE_API_URL`.
-- Si falla la conexión, revisa:
-  - MySQL está activo
-  - la base `heimdall_tech` existe
-  - `.env` del backend tiene credenciales correctas
-  - `.env` del frontend apunta a la API correcta
+- `Failed to fetch`: confirma que `http://localhost:8000/api/` responde y que frontend/backend están activos.
+- Error de MySQL: revisa servicio, puerto y credenciales en `backend\.env`.
+- Cámara bloqueada: usa `localhost` o HTTPS y concede el permiso del navegador; en QR se puede usar el código escrito.
+- El inicio completo, la configuración detallada y la guía móvil están en el [README principal](README.md) y [USO_MOVIL.md](USO_MOVIL.md).

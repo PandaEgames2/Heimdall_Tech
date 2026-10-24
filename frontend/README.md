@@ -1,16 +1,32 @@
-# React + Vite
+# Heimdall Tech — frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Interfaz React 19 + Vite. Requiere que el backend Django esté activo para iniciar sesión y consultar información.
 
-Currently, two official plugins are available:
+## Requisitos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js 20.19+ o 22.12+ y npm.
+- Navegador moderno. Para la cámara, prueba en `http://localhost:5173/` o configura HTTPS.
+- Backend Heimdall disponible en `http://localhost:8000/api/`.
 
-## React Compiler
+La aplicación usa `VITE_API_URL`. Si se deja vacía, calcula la API como el mismo host del frontend en el puerto `8000`, lo que permite probar desde otro dispositivo de la red. Para un destino fijo, copia `.env.example` a `.env` y asigna, por ejemplo, `VITE_API_URL=http://localhost:8000/api`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Instalar y ejecutar
 
-## Expanding the ESLint configuration
+Desde esta carpeta:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```powershell
+npm ci
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+Abre <http://localhost:5173/>. El método recomendado para instalar y levantar todo el sistema en Windows está en el [README principal](../README.md).
+
+## Comandos de desarrollo
+
+```powershell
+npm run lint
+npm run build
+npm run preview -- --host 127.0.0.1 --port 4173
+```
+
+`npm ci` instala las versiones fijadas en `package-lock.json`. Usa `npm install` solo cuando vayas a añadir o actualizar dependencias.

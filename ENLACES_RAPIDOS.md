@@ -1,88 +1,68 @@
-# Heimdall Tech - Enlaces rápidos
+# Heimdall Tech — enlaces rápidos
 
-Este archivo reúne los enlaces más útiles para revisar la aplicación sin perder tiempo navegando por toda la estructura.
+## Servicios locales
 
-## 1. Iniciar el backend
+- Frontend: <http://localhost:5173/>
+- API: <http://localhost:8000/api/>
+- Salud de API/base de datos: <http://localhost:8000/api/health/>
+- Inicio de sesión (POST): <http://localhost:8000/api/identidad/auth/login/>
+
+Si aparece `Failed to fetch`, revisa primero que el backend responda en `http://localhost:8000/api/`.
+
+## Iniciar
+
+Desde PowerShell en la raíz del repositorio, con MySQL activo y `backend\.env` configurado:
 
 ```powershell
-cd "C:\Users\Ian de Jesus\Documents\Heimdall_Tech\Heimdall_Tech\backend"
-.\.venv\Scripts\Activate.ps1
-python manage.py runserver 8000
+powershell -ExecutionPolicy Bypass -File .\iniciar.ps1
 ```
 
-## 2. Base de datos / SQL
+Instalación nueva y pasos de base de datos: [README principal](README.md). No ejecutes `bootstrap_db.py --execute` sobre una base que contenga datos que quieras conservar.
 
-- Archivo principal SQL:
-  `C:\Users\Ian de Jesus\Documents\Heimdall_Tech\Heimdall_Tech\Heimdall_Tech.sql`
+## Endpoints de la API
 
-- Ejecutar primero antes de iniciar Django
-
-## 3. Enlaces del sistema
-
-### Página principal
-
-- http://127.0.0.1:8000/
-
-### Administración Django
-
-- http://127.0.0.1:8000/admin/
-
-### API base
-
-- http://127.0.0.1:8000/api/
-
-### Empresas
-
-- http://127.0.0.1:8000/api/empresas/planes/
-- http://127.0.0.1:8000/api/empresas/establecimientos/?id_establecimiento=1
+La mayoría de endpoints de negocio requieren un token JWT. Los endpoints multiestablecimiento usan `id_establecimiento` para seleccionar el ámbito autorizado del usuario.
 
 ### Identidad
 
-- http://127.0.0.1:8000/api/identidad/roles/
-- http://127.0.0.1:8000/api/identidad/usuarios/?id_establecimiento=1
+- `POST /api/identidad/auth/login/`
+- `POST /api/identidad/auth/refresh/`
+- `GET /api/profile/`
+- `GET /api/identidad/usuarios/?id_establecimiento=1`
+- `/api/identidad/roles/` (solo Super Admin)
+
+### Empresas
+
+- `GET /api/empresas/planes/`
+- `/api/empresas/establecimientos/`
 
 ### Operaciones
 
-- http://127.0.0.1:8000/api/operaciones/responsables/?id_establecimiento=1
-- http://127.0.0.1:8000/api/operaciones/vehiculos/?id_establecimiento=1
-- http://127.0.0.1:8000/api/operaciones/movimientos/?id_establecimiento=1
-- http://127.0.0.1:8000/api/operaciones/incidencias/?id_establecimiento=1
+- `/api/operaciones/responsables/?id_establecimiento=1`
+- `/api/operaciones/vehiculos/?id_establecimiento=1`
+- `/api/operaciones/movimientos/?id_establecimiento=1`
+- `/api/operaciones/incidencias/?id_establecimiento=1`
+- `/api/operaciones/invitaciones-visitantes/?id_establecimiento=1`
+- `POST /api/operaciones/qr/residente/`
+- `POST /api/operaciones/qr/residente/validar/`
+- `POST /api/operaciones/qr/visitante/validar/`
 
 ### Inteligencia
 
-- http://127.0.0.1:8000/api/inteligencia/reconocimientos/?id_establecimiento=3
+- `/api/inteligencia/reconocimientos/?id_establecimiento=1`
+- `POST /api/inteligencia/reconocimientos/procesar/?id_establecimiento=1`
 
-### Metadatos
-
-- http://127.0.0.1:8000/api/meta/idiomas/
-- http://127.0.0.1:8000/api/meta/catalogo-enums/
-
-## 4. Usuarios de demostración
-
-- IanLR
-- rastor65
-
-## 5. Importante
-
-Si quieres ver la información de un establecimiento concreto, siempre debe ir el parámetro:
-
-```text
-?id_establecimiento=1
-```
-
-Eso es parte del diseño SaaS del proyecto.
-
-## 6. Ejemplo de verificación rápida
+## Atajos de desarrollo
 
 ```powershell
-Invoke-WebRequest "http://127.0.0.1:8000/api/operaciones/responsables/?id_establecimiento=1" -UseBasicParsing
+cd frontend
+npm run lint
+npm run build
 ```
 
-## 7. Orden recomendado para pruebas
+```powershell
+cd backend
+.\.venv\Scripts\python.exe manage.py check
+```
 
-1. Ejecutar `Heimdall_Tech.sql`
-2. Activar entorno virtual
-3. Ejecutar `python manage.py runserver 8000`
-4. Abrir `http://127.0.0.1:8000/api/`
-5. Probar los endpoints de empresas, identidad y operaciones
-6. Revisar el panel admin
+Para probar el uso desde un teléfono, consulta [USO_MOVIL.md](USO_MOVIL.md). Para el entorno completo, vuelve al [README principal](README.md).

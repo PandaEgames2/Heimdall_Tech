@@ -15,6 +15,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- -----------------------------------------------------------------------------
 -- TABLA: PLAN
 -- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS INVITACION_VISITANTE;
 DROP TABLE IF EXISTS INCIDENCIA;
 DROP TABLE IF EXISTS RECONOCIMIENTO_PLACA;
 DROP TABLE IF EXISTS MOVIMIENTO;
@@ -106,6 +107,7 @@ CREATE TABLE VEHICULO (
     marca VARCHAR(50),
     modelo VARCHAR(50),
     color VARCHAR(30),
+    codigo_rfid VARCHAR(100) NULL,
     tipo_autorizacion ENUM('AUTORIZADO', 'VISITANTE', 'RESTRINGIDO') NOT NULL DEFAULT 'VISITANTE',
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_vehiculo_establecimiento FOREIGN KEY (id_establecimiento)
@@ -139,6 +141,38 @@ CREATE TABLE MOVIMIENTO (
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------
+-- TABLA: INVITACION_VISITANTE (QR de visitante y trazabilidad del residente anfitrión)
+-- -----------------------------------------------------------------------------
+CREATE TABLE INVITACION_VISITANTE (
+    id_invitacion BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_establecimiento INT NOT NULL,
+    id_residente INT NOT NULL,
+    nombre_visitante VARCHAR(100) NOT NULL,
+    documento_visitante VARCHAR(30) NULL,
+    placa_visitante VARCHAR(15) NULL,
+    motivo VARCHAR(255) NULL,
+    token_hash CHAR(64) NOT NULL UNIQUE,
+    vigente_desde DATETIME NOT NULL,
+    vigente_hasta DATETIME NOT NULL,
+    estado ENUM('PENDIENTE', 'EN_SITIO', 'FINALIZADA', 'REVOCADA') NOT NULL DEFAULT 'PENDIENTE',
+    fecha_ingreso DATETIME NULL,
+    fecha_salida DATETIME NULL,
+    id_movimiento_ingreso INT NULL,
+    id_movimiento_salida INT NULL,
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_invitacion_establecimiento FOREIGN KEY (id_establecimiento)
+        REFERENCES ESTABLECIMIENTO (id_establecimiento) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_invitacion_residente FOREIGN KEY (id_residente)
+        REFERENCES USUARIO (id_usuario) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_invitacion_movimiento_ingreso FOREIGN KEY (id_movimiento_ingreso)
+        REFERENCES MOVIMIENTO (id_movimiento) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_invitacion_movimiento_salida FOREIGN KEY (id_movimiento_salida)
+        REFERENCES MOVIMIENTO (id_movimiento) ON DELETE SET NULL ON UPDATE CASCADE,
+    INDEX ix_invitacion_tenant_estado (id_establecimiento, estado),
+    INDEX ix_invitacion_residente (id_residente)
+) ENGINE=InnoDB;
+
+-- -----------------------------------------------------------------------------
 -- TABLA: RECONOCIMIENTO_PLACA
 -- -----------------------------------------------------------------------------
 CREATE TABLE RECONOCIMIENTO_PLACA (
@@ -167,6 +201,7 @@ CREATE TABLE INCIDENCIA (
     id_incidencia INT AUTO_INCREMENT PRIMARY KEY,
     id_establecimiento INT NOT NULL,
     id_vehiculo INT NULL,
+    id_invitacion BIGINT NULL,
     id_usuario INT NOT NULL,
     titulo VARCHAR(100) NOT NULL,
     descripcion TEXT NOT NULL,
@@ -176,6 +211,8 @@ CREATE TABLE INCIDENCIA (
         REFERENCES ESTABLECIMIENTO (id_establecimiento) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_incidencia_vehiculo FOREIGN KEY (id_vehiculo)
         REFERENCES VEHICULO (id_vehiculo) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_incidencia_invitacion FOREIGN KEY (id_invitacion)
+        REFERENCES INVITACION_VISITANTE (id_invitacion) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT fk_incidencia_usuario FOREIGN KEY (id_usuario)
         REFERENCES USUARIO (id_usuario) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB;
@@ -208,7 +245,9 @@ INSERT INTO ESTABLECIMIENTO (id_establecimiento, id_plan, nombre, direccion, tel
 INSERT INTO ROL (id_rol, nombre, descripcion) VALUES
 (1, 'Administrador', 'Control total del establecimiento'),
 (2, 'Vigilante', 'Operador de garita o portería'),
-(3, 'Supervisor', 'Auditoría y reportes');
+(3, 'Supervisor', 'Auditoría y reportes'),
+(4, 'Super Admin', '["dashboard","usuarios","roles","catalogos","reportes","camaras","seguridad","config"]'),
+(5, 'Residente', 'Consulta su QR y administra invitaciones de visitantes');
 
 INSERT INTO USUARIO (id_usuario, id_establecimiento, id_rol, nombre, correo, password_hash) VALUES
 (1, 1, 1, 'Carlos Admin Pinos', 'admin@pinos.com', 'pbkdf2_sha256$dev$hash_pass_123'),
@@ -220,7 +259,9 @@ INSERT INTO USUARIO (id_usuario, id_establecimiento, id_rol, nombre, correo, pas
 (7, 3, 2, 'Mario Vigilante Uniguajira', 'porteria@uniguajira.edu.co', 'pbkdf2_sha256$dev$hash_pass_123'),
 (8, 3, 3, 'Sofia Supervisora', 'supervision@uniguajira.edu.co', 'pbkdf2_sha256$dev$hash_pass_123'),
 (9, 4, 1, 'Juan Admin Logístico', 'admin@logistico.com', 'pbkdf2_sha256$dev$hash_pass_123'),
-(10, 4, 2, 'Diego Vigilante Logístico', 'porteria@logistico.com', 'pbkdf2_sha256$dev$hash_pass_123');
+(10, 4, 2, 'Diego Vigilante Logístico', 'porteria@logistico.com', 'pbkdf2_sha256$dev$hash_pass_123'),
+(11, 1, 4, 'admin', 'admin@heimdall.tech', 'pbkdf2_sha256$dev$miacarola'),
+(12, 1, 4, 'rastor36', 'rastor36@heimdall.tech', 'pbkdf2_sha256$dev$miacarola');
 
 INSERT INTO RESPONSABLE (id_responsable, id_establecimiento, documento_identidad, nombre, telefono) VALUES
 (1, 1, '1001001', 'Maria Gomez', '3001112233'),

@@ -50,6 +50,7 @@ class Vehiculo(models.Model):
     marca = models.CharField(max_length=50, blank=True, null=True)
     modelo = models.CharField(max_length=50, blank=True, null=True)
     color = models.CharField(max_length=30, blank=True, null=True)
+    codigo_rfid = models.CharField(max_length=100, blank=True, null=True)
     tipo_autorizacion = models.CharField(
         max_length=20,
         choices=TipoAutorizacion.choices,
@@ -140,6 +141,14 @@ class Incidencia(models.Model):
         db_column="id_usuario",
         related_name="incidencias",
     )
+    id_invitacion = models.ForeignKey(
+        "InvitacionVisitante",
+        on_delete=models.SET_NULL,
+        db_column="id_invitacion",
+        related_name="incidencias",
+        blank=True,
+        null=True,
+    )
     titulo = models.CharField(max_length=100)
     descripcion = models.TextField()
     nivel_prioridad = models.CharField(
@@ -151,4 +160,92 @@ class Incidencia(models.Model):
 
     class Meta:
         db_table = "INCIDENCIA"
+        managed = False
+
+
+class InvitacionVisitante(models.Model):
+    class Estado(models.TextChoices):
+        PENDIENTE = "PENDIENTE", _("Pending")
+        EN_SITIO = "EN_SITIO", _("On site")
+        FINALIZADA = "FINALIZADA", _("Completed")
+        REVOCADA = "REVOCADA", _("Revoked")
+
+    id_invitacion = models.BigAutoField(primary_key=True, db_column="id_invitacion")
+    id_establecimiento = models.ForeignKey(
+        Establecimiento,
+        on_delete=models.CASCADE,
+        db_column="id_establecimiento",
+        related_name="invitaciones_visitantes",
+    )
+    id_residente = models.ForeignKey(
+        Usuario,
+        on_delete=models.RESTRICT,
+        db_column="id_residente",
+        related_name="invitaciones_visitantes",
+    )
+    nombre_visitante = models.CharField(max_length=100)
+    documento_visitante = models.CharField(max_length=30, blank=True, null=True)
+    placa_visitante = models.CharField(max_length=15, blank=True, null=True)
+    motivo = models.CharField(max_length=255, blank=True, null=True)
+    token_hash = models.CharField(max_length=64, unique=True)
+    vigente_desde = models.DateTimeField()
+    vigente_hasta = models.DateTimeField()
+    estado = models.CharField(max_length=12, choices=Estado.choices, default=Estado.PENDIENTE)
+    fecha_ingreso = models.DateTimeField(blank=True, null=True)
+    fecha_salida = models.DateTimeField(blank=True, null=True)
+    id_movimiento_ingreso = models.ForeignKey(
+        Movimiento,
+        on_delete=models.SET_NULL,
+        db_column="id_movimiento_ingreso",
+        related_name="invitaciones_ingreso",
+        blank=True,
+        null=True,
+    )
+    id_movimiento_salida = models.ForeignKey(
+        Movimiento,
+        on_delete=models.SET_NULL,
+        db_column="id_movimiento_salida",
+        related_name="invitaciones_salida",
+        blank=True,
+        null=True,
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "INVITACION_VISITANTE"
+        managed = False
+        ordering = ("-fecha_creacion",)
+
+    def __str__(self):
+        return f"{self.nombre_visitante} · {self.id_establecimiento_id} · {self.estado}"
+
+
+class CodigoAccesoResidente(models.Model):
+    """Código numérico temporal vinculado al mismo QR de acceso del residente."""
+
+    id_codigo = models.AutoField(primary_key=True, db_column="id_codigo")
+    id_establecimiento = models.ForeignKey(
+        Establecimiento,
+        on_delete=models.CASCADE,
+        db_column="id_establecimiento",
+    )
+    id_residente = models.ForeignKey(
+        Usuario,
+        on_delete=models.CASCADE,
+        db_column="id_residente",
+    )
+    id_vehiculo = models.ForeignKey(
+        Vehiculo,
+        on_delete=models.SET_NULL,
+        db_column="id_vehiculo",
+        blank=True,
+        null=True,
+    )
+    token_hash = models.CharField(max_length=64, unique=True)
+    codigo_hash = models.CharField(max_length=64)
+    fecha_expiracion = models.DateTimeField()
+    fecha_uso = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = "CODIGO_ACCESO_RESIDENTE"
         managed = False

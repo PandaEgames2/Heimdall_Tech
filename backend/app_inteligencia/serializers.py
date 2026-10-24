@@ -3,7 +3,7 @@ from rest_framework import serializers
 from app_identidad.serializers import UsuarioResumenSerializer
 from app_operaciones.serializers import MovimientoSerializer
 
-from config.serializers import ChoiceLabelMixin
+from config.serializers import ChoiceLabelMixin, validate_tenant_relations
 
 from .models import ReconocimientoPlaca
 
@@ -29,6 +29,9 @@ class ReconocimientoPlacaSerializer(serializers.ModelSerializer):
 
     def get_resultado_ia_etiqueta(self, obj):
         return ChoiceLabelMixin.choice_display(obj, "resultado_ia")
+
+    def validate(self, attrs):
+        return validate_tenant_relations(self, attrs, ("id_movimiento", "id_usuario"))
 
 
 class ReconocimientoPlacaDetalleSerializer(ReconocimientoPlacaSerializer):

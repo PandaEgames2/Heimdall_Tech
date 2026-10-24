@@ -6,3 +6,4 @@ mysql-connector-python>=9.0,<10
 python-dotenv>=1.0,<2
 django-cors-headers>=4.3,<5
 Babel>=2.14,<3
+fast-alpr[onnx]==0.4.0
