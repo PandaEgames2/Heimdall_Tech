@@ -1,5 +1,5 @@
 ﻿# Heimdall Tech — requiere MySQL activo; inicia backend + frontend
-# Uso: powershell -ExecutionPolicy Bypass -File .\iniciar.ps1
+# Uso en VS Code (PowerShell, desde la raíz del proyecto): .\iniciar.ps1
 # Requiere: MySQL en ejecución, Python 3.12+, Node.js 20.19+ o 22.12+
 
 $ErrorActionPreference = "Stop"
@@ -125,7 +125,7 @@ if (-not (Test-Path (Join-Path $Frontend ".env"))) {
     Copy-Item (Join-Path $Frontend ".env.example") (Join-Path $Frontend ".env")
 }
 
-Write-Host "Iniciando backend (puerto 8000) y frontend (puerto 5173)..." -ForegroundColor Green
+Write-Host "Iniciando backend y buscando el frontend actual..." -ForegroundColor Green
 $BackendOut = Join-Path $Backend "runserver.stdout.log"
 $BackendErr = Join-Path $Backend "runserver.stderr.log"
 $FrontendOut = Join-Path $Frontend "vite.stdout.log"
@@ -155,11 +155,22 @@ if (-not $ApiReady) {
     exit 1
 }
 
-$FrontendReady = $false
-try {
-    $null = Invoke-WebRequest -Uri "http://127.0.0.1:5173/" -TimeoutSec 2 -UseBasicParsing
-    $FrontendReady = $true
-} catch { }
+function Find-HeimdallFrontendPort {
+    for ($port = 5173; $port -le 5180; $port++) {
+        try {
+            $page = Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -TimeoutSec 1 -UseBasicParsing
+            if (-not $page.Content.Contains('id="root"')) { continue }
+            $source = Invoke-WebRequest -Uri "http://127.0.0.1:$port/src/App.jsx" -TimeoutSec 2 -UseBasicParsing
+            if ($source.Content.Contains("mobile-menu-toggle") -and $source.Content.Contains("permission-reset-all")) {
+                return $port
+            }
+        } catch { }
+    }
+    return $null
+}
+
+$FrontendPort = Find-HeimdallFrontendPort
+$FrontendReady = $null -ne $FrontendPort
 
 if (-not $FrontendReady) {
     Start-Process powershell -WindowStyle Hidden -RedirectStandardOutput $FrontendOut -RedirectStandardError $FrontendErr -ArgumentList @(
@@ -167,15 +178,13 @@ if (-not $FrontendReady) {
     )
     for ($attempt = 0; $attempt -lt 20 -and -not $FrontendReady; $attempt++) {
         Start-Sleep -Seconds 1
-        try {
-            $null = Invoke-WebRequest -Uri "http://127.0.0.1:5173/" -TimeoutSec 2 -UseBasicParsing
-            $FrontendReady = $true
-        } catch { }
+        $FrontendPort = Find-HeimdallFrontendPort
+        $FrontendReady = $null -ne $FrontendPort
     }
 }
 
 if (-not $FrontendReady) {
-    Write-Host "ERROR: El frontend no respondió en http://127.0.0.1:5173/. Revisa frontend\vite.stderr.log." -ForegroundColor Red
+    Write-Host "ERROR: No se encontró Heimdall Tech en los puertos 5173–5180. Revisa frontend\vite.stderr.log." -ForegroundColor Red
     if (Test-Path $FrontendErr) { Get-Content $FrontendErr -Tail 20 }
     exit 1
 }
@@ -183,8 +192,8 @@ if (-not $FrontendReady) {
 Write-Host ""
 Write-Host "Listo:" -ForegroundColor Green
 Write-Host "  API:      http://127.0.0.1:8000/api/"
-Write-Host "  Frontend: http://127.0.0.1:5173/"
+Write-Host "  Frontend: http://localhost:$FrontendPort/"
 Write-Host "  Super Admin: usuario admin  | contraseña miacarola"
 Write-Host "  Vigilante:   vigilante@pinos.com | contraseña hash_pass_123"
 Write-Host "  Residente:   residente@pinos.com | contraseña hash_pass_123"
-Write-Host "  Móvil (misma Wi-Fi): http://<IP-de-tu-PC>:5173/ — ver USO_MOVIL.md"
+Write-Host "  Móvil (misma Wi-Fi): http://<IP-de-tu-PC>:$FrontendPort/ — ver USO_MOVIL.md"
