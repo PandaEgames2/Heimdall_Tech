@@ -86,6 +86,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 token["id_establecimiento"] = perfil.id_establecimiento_id
                 token["rol"] = perfil.id_rol.nombre if perfil.id_rol else "Sin rol"
                 token["rol_id"] = perfil.id_rol_id if perfil.id_rol else None
+                token["permisos_excepciones"] = perfil.permisos_excepciones or {}
         except Exception:
             pass
 
@@ -160,6 +161,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 data["user"]["rol"] = perfil.id_rol.nombre if perfil.id_rol else "Sin rol"
                 data["user"]["rol_id"] = perfil.id_rol_id if perfil.id_rol else None
                 data["user"]["is_platform_superadmin"] = perfil.id_rol_id == SUPER_ADMIN_ROL_ID
+                data["user"]["permisos_excepciones"] = perfil.permisos_excepciones or {}
         except Exception:
             pass
 

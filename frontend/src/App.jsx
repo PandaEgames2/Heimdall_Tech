@@ -5,6 +5,7 @@ import './App.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:8000/api`;
 const SUPER_ADMIN_ROL_ID = 4;
+const EMPTY_PERMISSION_OVERRIDES = Object.freeze({});
 
 const permissionsByRole = {
   superadmin: ['dashboard', 'usuarios', 'roles', 'catalogos', 'reportes', 'camaras', 'seguridad', 'config', 'accesos'],
@@ -329,6 +330,23 @@ const listRoleNames = {
   5: 'Residente',
 };
 
+const permissionExceptionOptions = [
+  { key: 'usuarios', label: 'Usuarios', hint: 'Gestionar las cuentas del establecimiento' },
+  { key: 'roles', label: 'Roles', hint: 'Consultar o administrar roles' },
+  { key: 'catalogos', label: 'Catálogo', hint: 'Consultar los catálogos del sistema' },
+  { key: 'reportes', label: 'Reportes', hint: 'Consultar actividad y reportes' },
+  { key: 'camaras', label: 'Cámaras', hint: 'Acceder a las cámaras' },
+  { key: 'seguridad', label: 'Seguridad', hint: 'Consultar el panel de seguridad' },
+  { key: 'config', label: 'Configuración', hint: 'Acceder a la configuración' },
+  { key: 'accesos', label: 'Control de acceso', hint: 'Registrar y consultar accesos' },
+  { key: 'mi_qr', label: 'Mi QR e invitados', hint: 'Acceder a invitaciones y QR' },
+];
+
+const userPermissionLabels = {
+  puede_editar: 'Permiso de edición',
+  solo_lectura: 'Solo lectura',
+};
+
 const defaultUserForm = {
   nombre: '',
   email: '',
@@ -338,6 +356,7 @@ const defaultUserForm = {
   residente_documento: '',
   residente_telefono: '',
   residente_unidad: '',
+  permisos_excepciones: {},
 };
 
 const defaultRoleForm = {
@@ -375,6 +394,7 @@ function App() {
   const [session, setSession] = useState(initialSession);
   const [debugViewRole, setDebugViewRole] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [catalogData, setCatalogData] = useState({
@@ -411,6 +431,8 @@ function App() {
   const [error, setError] = useState('');
   const [showUserForm, setShowUserForm] = useState(false);
   const [editingUserId, setEditingUserId] = useState(null);
+  const [userModalTab, setUserModalTab] = useState('account');
+  const [userSearch, setUserSearch] = useState('');
   const [showRoleForm, setShowRoleForm] = useState(false);
   const [userForm, setUserForm] = useState(defaultUserForm);
   const [roleForm, setRoleForm] = useState(defaultRoleForm);
@@ -433,10 +455,24 @@ function App() {
     [effectiveRole],
   );
   const hasFeature = (feature) => Boolean(isPlatformSuperAdmin || session.user?.funcionalidades?.[feature]);
+  const ownOverrides = session.user?.permisos_excepciones || EMPTY_PERMISSION_OVERRIDES;
+  const effectivePermissions = useMemo(() => {
+    const next = new Set(permissions);
+    Object.entries(ownOverrides).forEach(([key, allowed]) => {
+      if (!permissionCatalog[key]) return;
+      if (allowed) next.add(key);
+      else next.delete(key);
+    });
+    return [...next];
+  }, [permissions, ownOverrides]);
+  const canAccess = (key) => effectivePermissions.includes(key);
+  const canEdit = isPlatformSuperAdmin || (ownOverrides.puede_editar !== false && ownOverrides.solo_lectura !== true);
 
   useEffect(() => {
-    if (actualRole === 'residente' && activeTab !== 'mi_qr') setActiveTab('mi_qr');
-  }, [actualRole, activeTab]);
+    if (actualRole === 'residente' && activeTab !== 'mi_qr' && !effectivePermissions.includes(activeTab)) {
+      setActiveTab('mi_qr');
+    }
+  }, [actualRole, activeTab, effectivePermissions]);
 
   const assignableRoleOptions = useMemo(() => {
     const base = [
@@ -466,6 +502,40 @@ function App() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  useEffect(() => {
+    if (!showUserForm) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShowUserForm(false);
+        setEditingUserId(null);
+        setUserForm(defaultUserForm);
+        setUserModalTab('account');
+        setError('');
+      }
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [showUserForm]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setMobileMenuOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     if (!session.accessToken) {
@@ -517,6 +587,40 @@ function App() {
   }, [session.accessToken]);
 
   useEffect(() => {
+    if (!session.accessToken) return undefined;
+    const refreshOwnPermissions = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/profile/`, {
+          headers: { Authorization: `Bearer ${session.accessToken}`, 'Content-Type': 'application/json' },
+        });
+        if (!response.ok) return;
+        const profile = await response.json();
+        setSession((current) => {
+          if (current.accessToken !== session.accessToken) return current;
+          const nextUser = { ...current.user, ...profile };
+          if (JSON.stringify(nextUser) === JSON.stringify(current.user)) return current;
+          const nextSession = { ...current, user: nextUser };
+          saveSession(nextSession);
+          return nextSession;
+        });
+      } catch {
+        // Keep the current session if the profile refresh fails temporarily.
+      }
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshOwnPermissions();
+    };
+    window.addEventListener('focus', refreshOwnPermissions);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    const refreshTimer = window.setInterval(refreshOwnPermissions, 30000);
+    return () => {
+      window.removeEventListener('focus', refreshOwnPermissions);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.clearInterval(refreshTimer);
+    };
+  }, [session.accessToken]);
+
+  useEffect(() => {
     if (!session.loggedIn || !session.accessToken) return;
 
     const establecimientoId = session.user?.id_establecimiento;
@@ -532,28 +636,33 @@ function App() {
 
     const loadDashboardData = async () => {
       try {
-        const dataRequests = actualRole === 'residente' ? [] : [
+        const canReadReports = effectivePermissions.includes('reportes')
+          || (actualRole !== 'residente' && ownOverrides.reportes !== false);
+        const canReadSecurity = effectivePermissions.includes('seguridad');
+        const dataRequests = canReadReports ? [
           ['movimientos', fetch(`${API_BASE_URL}/operaciones/movimientos/?id_establecimiento=${establecimientoId}`, options)],
           ['incidencias', fetch(`${API_BASE_URL}/operaciones/incidencias/?id_establecimiento=${establecimientoId}`, options)],
-        ];
-        if (actualRole !== 'residente' && (isPlatformSuperAdmin || session.user?.funcionalidades?.lpr)) {
+        ] : canReadSecurity ? [
+          ['incidencias', fetch(`${API_BASE_URL}/operaciones/incidencias/?id_establecimiento=${establecimientoId}&permiso=seguridad`, options)],
+        ] : [];
+        if (canReadReports && (isPlatformSuperAdmin || session.user?.funcionalidades?.lpr)) {
           dataRequests.push(['reconocimientos', fetch(`${API_BASE_URL}/inteligencia/reconocimientos/?id_establecimiento=${establecimientoId}`, options)]);
         }
-        if (permissions.includes('usuarios')) {
+        if (effectivePermissions.includes('usuarios')) {
           dataRequests.push(['usuarios', fetch(`${API_BASE_URL}/identidad/usuarios/?id_establecimiento=${establecimientoId}`, options)]);
         }
-        if (permissions.includes('catalogos')) {
+        if (effectivePermissions.includes('catalogos')) {
           dataRequests.push(['planes', fetch(`${API_BASE_URL}/empresas/planes/`, options)]);
           dataRequests.push(['establecimientos', fetch(`${API_BASE_URL}/empresas/establecimientos/`, options)]);
           dataRequests.push(['vehiculos', fetch(`${API_BASE_URL}/operaciones/vehiculos/?id_establecimiento=${establecimientoId}`, options)]);
           dataRequests.push(['responsables', fetch(`${API_BASE_URL}/operaciones/responsables/?id_establecimiento=${establecimientoId}`, options)]);
-        } else if (permissions.includes('accesos')) {
-          dataRequests.push(['vehiculos', fetch(`${API_BASE_URL}/operaciones/vehiculos/?id_establecimiento=${establecimientoId}`, options)]);
+        } else if (effectivePermissions.includes('accesos')) {
+          dataRequests.push(['vehiculos', fetch(`${API_BASE_URL}/operaciones/vehiculos/?id_establecimiento=${establecimientoId}&permiso=accesos`, options)]);
         }
-        if (permissions.includes('accesos')) {
+        if (effectivePermissions.includes('accesos')) {
           dataRequests.push(['invitaciones', fetch(`${API_BASE_URL}/operaciones/invitaciones-visitantes/?id_establecimiento=${establecimientoId}`, options)]);
         }
-        if (isPlatformSuperAdmin) dataRequests.push(['roles', fetch(`${API_BASE_URL}/identidad/roles/`, options)]);
+        if (effectivePermissions.includes('roles')) dataRequests.push(['roles', fetch(`${API_BASE_URL}/identidad/roles/`, options)]);
         const responses = await Promise.all(dataRequests.map(([, request]) => request));
         const failedResponse = responses.find((response) => !response.ok);
         if (failedResponse) throw new Error(`La API rechazó la carga de datos (${failedResponse.status}).`);
@@ -561,8 +670,8 @@ function App() {
         const loadedData = await Promise.all(dataRequests.map(async ([key, request]) => [key, await (await request).json()]));
         const dataByKey = Object.fromEntries(loadedData);
         const usuariosData = dataByKey.usuarios || { results: [] };
-        const movimientosData = dataByKey.movimientos;
-        const incidenciasData = dataByKey.incidencias;
+        const movimientosData = dataByKey.movimientos || { results: [], count: 0 };
+        const incidenciasData = dataByKey.incidencias || { results: [], count: 0 };
         const reconocimientosData = dataByKey.reconocimientos || { results: [], count: 0 };
         const rolesData = dataByKey.roles || { results: [] };
         const planesData = dataByKey.planes || { results: [] };
@@ -574,10 +683,12 @@ function App() {
         const usuarios = normalizeListResponse(usuariosData).map((u) => ({
           id: u.id_usuario,
           nombre: u.nombre,
-          rol: u.rol?.nombre || u.id_rol || 'Sin rol',
+          rol: u.rol?.nombre || listRoleNames[u.id_rol] || u.id_rol || 'Sin rol',
+          rolId: u.id_rol,
           email: u.correo,
           estado: u.estado ? 'Activo' : 'Inactivo',
           activo: Boolean(u.estado),
+          permisos_excepciones: u.permisos_excepciones || {},
         }));
 
         const rolesList = normalizeListResponse(rolesData).map((roleItem) => ({
@@ -589,7 +700,7 @@ function App() {
 
         setUsers(usuarios);
         setRoles(rolesList);
-        if (permissions.includes('accesos')) setVisitorInvitations(normalizeListResponse(invitacionesData));
+        if (effectivePermissions.includes('accesos')) setVisitorInvitations(normalizeListResponse(invitacionesData));
         setCatalogData({
           planes: normalizeListResponse(planesData),
           establecimientos: normalizeListResponse(establecimientosData),
@@ -599,7 +710,7 @@ function App() {
           establecimientosCount: establecimientosData.count ?? normalizeListResponse(establecimientosData).length,
           vehiculosCount: vehiculosData.count ?? normalizeListResponse(vehiculosData).length,
         });
-        if (actualRole !== 'residente') {
+        if (canReadReports || canReadSecurity) {
           setReportData({
             movimientos: normalizeListResponse(movimientosData),
             incidencias: normalizeListResponse(incidenciasData),
@@ -614,7 +725,7 @@ function App() {
         setUsers([]);
         setRoles([]);
         setCatalogData({ planes: [], establecimientos: [], vehiculos: [], planesCount: 0, establecimientosCount: 0, vehiculosCount: 0 });
-        if (actualRole !== 'residente') {
+        if ((actualRole !== 'residente' && ownOverrides.reportes !== false) || effectivePermissions.includes('seguridad')) {
           setReportData({ movimientos: [], incidencias: [], reconocimientos: [], movimientosCount: 0, incidenciasCount: 0, reconocimientosCount: 0 });
         }
         setError(loadError.message || 'No se pudieron cargar los datos del establecimiento.');
@@ -622,7 +733,7 @@ function App() {
     };
 
     loadDashboardData();
-  }, [session.loggedIn, session.accessToken, session.user?.id_establecimiento, session.user?.funcionalidades?.lpr, isPlatformSuperAdmin, permissions, actualRole]);
+  }, [session.loggedIn, session.accessToken, session.user?.id_establecimiento, session.user?.funcionalidades?.lpr, isPlatformSuperAdmin, effectivePermissions, actualRole]);
 
   useEffect(() => {
     if (!session.loggedIn || actualRole !== 'residente' || !session.accessToken) return undefined;
@@ -663,8 +774,6 @@ function App() {
       window.clearInterval(interval);
     };
   }, [session.loggedIn, session.accessToken, session.user?.id_establecimiento, actualRole, residentQrVehicle]);
-
-  const canAccess = (key) => permissions.includes(key);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -745,7 +854,9 @@ function App() {
         ? {
           nombre: userForm.nombre.trim(),
           correo: userForm.email.trim(),
+          id_rol: roleIdMap[userForm.rol],
           estado: Boolean(userForm.estado),
+          ...(isPlatformSuperAdmin ? { permisos_excepciones: userForm.permisos_excepciones || {} } : {}),
         }
         : {
           id_establecimiento: establecimientoId,
@@ -777,9 +888,11 @@ function App() {
         id: saved.id_usuario,
         nombre: saved.nombre,
         rol: saved.rol?.nombre || listRoleNames[saved.id_rol] || userForm.rol,
+        rolId: saved.id_rol,
         email: saved.correo,
         estado: saved.estado ? 'Activo' : 'Inactivo',
         activo: Boolean(saved.estado),
+        permisos_excepciones: saved.permisos_excepciones || userForm.permisos_excepciones || {},
       };
 
       if (editingUserId) {
@@ -789,6 +902,7 @@ function App() {
       }
       setUserForm(defaultUserForm);
       setEditingUserId(null);
+      setUserModalTab('account');
       setShowUserForm(false);
       setError('');
     } catch (createError) {
@@ -1234,118 +1348,101 @@ function App() {
     </div>
   );
 
+  const closeUserModal = () => {
+    setShowUserForm(false);
+    setEditingUserId(null);
+    setUserForm(defaultUserForm);
+    setUserModalTab('account');
+    setError('');
+  };
+
+  const openUserModal = (user = null, tab = 'account') => {
+    setEditingUserId(user?.id ?? null);
+    if (user) {
+      const matchingRole = Object.entries(roleIdMap).find(([, id]) => Number(id) === Number(user.rolId));
+      setUserForm({ ...defaultUserForm, nombre: user.nombre, email: user.email, rol: matchingRole?.[0] || 'vigilante', estado: user.activo ?? user.estado === 'Activo', permisos_excepciones: user.permisos_excepciones || {} });
+    } else setUserForm(defaultUserForm);
+    setUserModalTab(tab);
+    setShowUserForm(true);
+    setError('');
+  };
+
+  const setPermissionException = (key, value) => {
+    setUserForm((current) => {
+      const next = { ...(current.permisos_excepciones || {}) };
+      if (value === null) delete next[key];
+      else next[key] = value;
+      return { ...current, permisos_excepciones: next };
+    });
+  };
+
+  const filteredUsers = users.filter((user) => `${user.nombre} ${user.email} ${user.rol}`.toLocaleLowerCase().includes(userSearch.trim().toLocaleLowerCase()));
+  const modalRoleOptions = editingUserId && !assignableRoleOptions.some((option) => option.value === userForm.rol)
+    ? [{ value: userForm.rol, label: listRoleNames[roleIdMap[userForm.rol]] || userForm.rol }, ...assignableRoleOptions]
+    : assignableRoleOptions;
+
   const renderUsers = () => (
-    <div className="panel-card">
-      <div className="section-header">
-        <h3>Usuarios</h3>
-        <button className="primary-btn" onClick={() => {
-          if (showUserForm) {
-            setShowUserForm(false);
-            setEditingUserId(null);
-            setUserForm(defaultUserForm);
-          } else {
-            setShowUserForm(true);
-          }
-        }}>
-          {showUserForm ? 'Cerrar' : '+ Nuevo usuario'}
-        </button>
+    <div className="panel-card user-management-card">
+      <div className="user-management-heading">
+        <div><span className="eyebrow">Administración de acceso</span><h3>Usuarios y roles</h3><p>Administra cuentas, asigna roles y define excepciones de acceso.</p></div>
+        <button className="primary-btn" type="button" disabled={!canEdit} onClick={() => openUserModal()}><span aria-hidden="true">＋</span> Nuevo usuario</button>
       </div>
+      <div className="user-table-toolbar">
+        <label className="user-search-field"><span className="sr-only">Buscar usuarios</span><span aria-hidden="true">⌕</span><input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Buscar por nombre, correo o rol…" /></label>
+        <span className="user-result-count">{filteredUsers.length} de {users.length} usuarios</span>
+      </div>
+      <div className="table-scroll user-table-scroll"><table className="data-table user-data-table">
+        <thead><tr><th>Usuario</th><th>Rol asignado</th><th>Estado</th><th><span className="sr-only">Acciones</span></th></tr></thead>
+        <tbody>{filteredUsers.map((user) => {
+          const initials = user.nombre.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+          const exceptionCount = Object.keys(user.permisos_excepciones || {}).length;
+          return <tr key={user.id}>
+            <td><div className="user-identity"><span className="user-avatar">{initials || 'U'}</span><span><strong>{user.nombre}</strong><small>{user.email}</small></span></div></td>
+            <td><span className="user-role-pill">{user.rol}</span></td>
+            <td><span className={`user-status ${user.estado === 'Activo' ? 'is-active' : 'is-inactive'}`}><i />{user.estado}</span></td>
+            <td><div className="user-row-actions"><button type="button" className="user-action-btn" disabled={!canEdit} onClick={() => openUserModal(user)}>Editar usuario</button>{isPlatformSuperAdmin ? <button type="button" className="user-action-btn permission-action" onClick={() => openUserModal(user, 'permissions')}>Permisos{exceptionCount ? <span>{exceptionCount}</span> : null}</button> : null}</div></td>
+          </tr>;
+        })}{!filteredUsers.length ? <tr><td colSpan="4" className="user-empty-state">{users.length ? 'No hay usuarios que coincidan con la búsqueda.' : 'Todavía no hay usuarios registrados.'}</td></tr> : null}</tbody>
+      </table></div>
 
-      {showUserForm && (
-        <form className="form-panel" onSubmit={handleCreateUser}>
-          <h4>{editingUserId ? 'Editar usuario del establecimiento' : 'Crear usuario del establecimiento'}</h4>
-          <div className="field-grid">
-            <label>
-              <span>Nombre</span>
-              <input value={userForm.nombre} onChange={(e) => setUserForm((p) => ({ ...p, nombre: e.target.value }))} />
-            </label>
-            <label>
-              <span>Email</span>
-              <input type="email" value={userForm.email} onChange={(e) => setUserForm((p) => ({ ...p, email: e.target.value }))} />
-            </label>
-            {!editingUserId ? <label>
-              <span>Contraseña inicial</span>
-              <input type="password" minLength="8" autoComplete="new-password" value={userForm.password} onChange={(e) => setUserForm((p) => ({ ...p, password: e.target.value }))} required />
-            </label> : <>
-              <label>
-                <span>Nueva contraseña (opcional)</span>
-                <input type="password" minLength="8" autoComplete="new-password" value={userForm.password} onChange={(e) => setUserForm((p) => ({ ...p, password: e.target.value }))} placeholder="Dejar vacío para conservarla" />
-              </label>
-              <label>
-                <span>Estado de la cuenta</span>
-                <select value={userForm.estado ? 'true' : 'false'} onChange={(e) => setUserForm((p) => ({ ...p, estado: e.target.value === 'true' }))}>
-                  <option value="true">Activo</option><option value="false">Inactivo</option>
-                </select>
-              </label>
-            </>}
-            {!editingUserId ? <label>
-              <span>Rol</span>
-              <select value={userForm.rol} onChange={(e) => setUserForm((p) => ({ ...p, rol: e.target.value }))}>
-                {assignableRoleOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </label> : null}
-            {!editingUserId && isPlatformSuperAdmin ? (
-              <label>
-                <span>Establecimiento asignado</span>
-                <select value={userForm.id_establecimiento || String(session.user?.id_establecimiento || '')} onChange={(e) => setUserForm((p) => ({ ...p, id_establecimiento: e.target.value }))} required>
-                  <option value="" disabled>Selecciona un establecimiento</option>
-                  {catalogData.establecimientos.map((item) => <option key={item.id_establecimiento} value={item.id_establecimiento}>{item.nombre} · {item.plan?.nombre || 'Sin plan'}</option>)}
-                </select>
-              </label>
-            ) : null}
-            {!editingUserId && userForm.rol === 'residente' ? (
-              <>
-                <label>
-                  <span>Documento del residente</span>
-                  <input value={userForm.residente_documento} onChange={(e) => setUserForm((p) => ({ ...p, residente_documento: e.target.value }))} required />
-                </label>
-                <label>
-                  <span>Teléfono</span>
-                  <input value={userForm.residente_telefono} onChange={(e) => setUserForm((p) => ({ ...p, residente_telefono: e.target.value }))} />
-                </label>
-                <label>
-                  <span>Casa / unidad</span>
-                  <input value={userForm.residente_unidad} onChange={(e) => setUserForm((p) => ({ ...p, residente_unidad: e.target.value }))} placeholder="Ej. Casa 14, Torre B" />
-                </label>
-              </>
-            ) : null}
-          </div>
-          <div className="form-actions">
-            <button type="submit" className="primary-btn">{editingUserId ? 'Guardar cambios' : 'Guardar'}</button>
-            <button type="button" className="ghost-btn" onClick={() => { setShowUserForm(false); setEditingUserId(null); setUserForm(defaultUserForm); }}>Cancelar</button>
-          </div>
-        </form>
-      )}
-
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Nombre</th>
-            <th>Email</th>
-            <th>Rol</th>
-            <th>Estado</th>
-            <th>Acción</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((user) => (
-            <tr key={user.id}>
-              <td>{user.nombre}</td>
-              <td>{user.email}</td>
-              <td>{user.rol}</td>
-              <td><span className={`badge ${user.estado === 'Activo' ? 'ok' : 'warn'}`}>{user.estado}</span></td>
-              <td><button className="ghost-btn" onClick={() => {
-                setEditingUserId(user.id);
-                setUserForm({ ...defaultUserForm, nombre: user.nombre, email: user.email, estado: user.activo ?? user.estado === 'Activo' });
-                setShowUserForm(true);
-                setError('');
-              }}>Editar</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {showUserForm ? <div className="user-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeUserModal(); }}>
+        <section className="user-modal" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+          <div className="user-modal-prism" />
+          <header className="user-modal-header"><div><span className="eyebrow">HEIMDALL TECH · ACCESOS</span><h2 id="user-modal-title">{editingUserId ? 'Editar usuario' : 'Crear usuario'}</h2><p>{editingUserId ? `Actualiza el acceso de ${userForm.nombre}.` : 'Crea una cuenta y asigna su rol inicial.'}</p></div><button type="button" className="user-modal-close" aria-label="Cerrar ventana" onClick={closeUserModal}>×</button></header>
+          {editingUserId && isPlatformSuperAdmin ? <div className="user-modal-tabs" role="tablist" aria-label="Secciones de usuario"><button type="button" role="tab" aria-selected={userModalTab === 'account'} className={userModalTab === 'account' ? 'active' : ''} onClick={() => setUserModalTab('account')}>Datos y rol</button><button type="button" role="tab" aria-selected={userModalTab === 'permissions'} className={userModalTab === 'permissions' ? 'active' : ''} onClick={() => setUserModalTab('permissions')}>Permisos extra</button></div> : null}
+          <form className="user-modal-form" onSubmit={handleCreateUser}>
+            {userModalTab === 'account' ? <div className="user-modal-content">
+              <div className="user-modal-section-title"><span>01</span><div><strong>Datos de la cuenta</strong><small>Información básica y estado de acceso</small></div></div>
+              <div className="user-modal-fields">
+                <label><span>Nombre completo</span><input autoFocus value={userForm.nombre} onChange={(event) => setUserForm((p) => ({ ...p, nombre: event.target.value }))} required /></label>
+                <label><span>Correo electrónico</span><input type="email" value={userForm.email} onChange={(event) => setUserForm((p) => ({ ...p, email: event.target.value }))} required /></label>
+                <label><span>Rol base</span><select value={userForm.rol} onChange={(event) => setUserForm((p) => ({ ...p, rol: event.target.value }))}>{modalRoleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                {editingUserId ? <label><span>Estado de la cuenta</span><select value={userForm.estado ? 'true' : 'false'} onChange={(event) => setUserForm((p) => ({ ...p, estado: event.target.value === 'true' }))}><option value="true">Activo</option><option value="false">Inactivo</option></select></label> : <label><span>Contraseña inicial</span><input type="password" minLength="8" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((p) => ({ ...p, password: event.target.value }))} required /></label>}
+                {editingUserId ? <label className="user-modal-field-wide"><span>Nueva contraseña <small>· opcional</small></span><input type="password" minLength="8" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((p) => ({ ...p, password: event.target.value }))} placeholder="Déjala vacía para conservar la actual" /></label> : null}
+                {!editingUserId && isPlatformSuperAdmin ? <label className="user-modal-field-wide"><span>Establecimiento asignado</span><select value={userForm.id_establecimiento || String(session.user?.id_establecimiento || '')} onChange={(event) => setUserForm((p) => ({ ...p, id_establecimiento: event.target.value }))} required><option value="" disabled>Selecciona un establecimiento</option>{catalogData.establecimientos.map((item) => <option key={item.id_establecimiento} value={item.id_establecimiento}>{item.nombre} · {item.plan?.nombre || 'Sin plan'}</option>)}</select></label> : null}
+                {!editingUserId && userForm.rol === 'residente' ? <><label><span>Documento del residente</span><input value={userForm.residente_documento} onChange={(event) => setUserForm((p) => ({ ...p, residente_documento: event.target.value }))} required /></label><label><span>Teléfono</span><input value={userForm.residente_telefono} onChange={(event) => setUserForm((p) => ({ ...p, residente_telefono: event.target.value }))} /></label><label className="user-modal-field-wide"><span>Casa o unidad</span><input value={userForm.residente_unidad} onChange={(event) => setUserForm((p) => ({ ...p, residente_unidad: event.target.value }))} placeholder="Ej. Casa 14, Torre B" /></label></> : null}
+              </div>
+            </div> : <div className="user-modal-content permissions-content">
+              <div className="user-modal-section-title"><span>02</span><div><strong>Excepciones individuales</strong><small>Estos ajustes sobreescriben los permisos del rol asignado.</small></div></div>
+              <div className="permission-reset-bar"><span>Quita las excepciones y vuelve a aplicar los permisos originales del rol.</span><button type="button" className="permission-reset-all" disabled={!Object.keys(userForm.permisos_excepciones || {}).length} onClick={() => setUserForm((current) => ({ ...current, permisos_excepciones: {} }))}>Restablecer permisos del rol</button></div>
+              <div className="permission-override-list">{permissionExceptionOptions.map((item) => {
+                const overrides = userForm.permisos_excepciones || {};
+                const inherited = !Object.prototype.hasOwnProperty.call(overrides, item.key);
+                const enabled = inherited ? (permissionsByRole[userForm.rol] || []).includes(item.key) : Boolean(overrides[item.key]);
+                return <div className="permission-override-row" key={item.key}><div><strong>{item.label}</strong><small>{item.hint}</small></div><div className="permission-override-control"><span className={inherited ? 'inherit-label' : enabled ? 'allow-label' : 'deny-label'}>{inherited ? 'Por rol' : enabled ? 'Permitido' : 'Denegado'}</span><button type="button" role="switch" aria-checked={enabled} aria-label={`${item.label}: ${inherited ? 'heredado del rol' : enabled ? 'permitido' : 'denegado'}`} className={`permission-switch ${enabled ? 'is-on' : ''} ${inherited ? 'is-inherited' : ''}`} onClick={() => setPermissionException(item.key, !enabled)}><span /></button>{!inherited ? <button type="button" className="inherit-reset" onClick={() => setPermissionException(item.key, null)} aria-label={`Restablecer ${item.label} al permiso del rol`}>Restablecer</button> : null}</div></div>;
+              })}</div>
+              <div className="permission-policy-card"><div className="policy-icon" aria-hidden="true">◇</div><div className="policy-heading"><strong>Política de edición</strong><small>El modo de solo lectura prevalece sobre el permiso de edición.</small></div>{[{ key: 'puede_editar', label: userPermissionLabels.puede_editar, fallback: true }, { key: 'solo_lectura', label: userPermissionLabels.solo_lectura, fallback: false }].map((item) => {
+                const overrides = userForm.permisos_excepciones || {};
+                const inherited = !Object.prototype.hasOwnProperty.call(overrides, item.key);
+                const enabled = inherited ? item.fallback : Boolean(overrides[item.key]);
+                return <div className="permission-policy-toggle" key={item.key}><span>{item.label}<small>{inherited ? 'Heredado' : 'Excepción activa'}</small></span><button type="button" role="switch" aria-checked={enabled} aria-label={`${item.label}: ${enabled ? 'activado' : 'desactivado'}`} className={`permission-switch ${enabled ? 'is-on' : ''} ${inherited ? 'is-inherited' : ''}`} onClick={() => setPermissionException(item.key, !enabled)}><span /></button></div>;
+              })}</div>
+            </div>}
+            {error ? <div className="user-modal-error" role="alert">{error}</div> : null}
+            <footer className="user-modal-footer"><button type="button" className="ghost-btn" onClick={closeUserModal}>Cancelar</button><button type="submit" className="primary-btn" disabled={!canEdit}>{editingUserId ? 'Guardar cambios' : 'Crear usuario'}</button></footer>
+          </form>
+        </section>
+      </div> : null}
     </div>
   );
 
@@ -1353,12 +1450,12 @@ function App() {
     <div className="panel-card">
       <div className="section-header">
         <h3>Roles y permisos</h3>
-        <button className="primary-btn" onClick={() => setShowRoleForm((v) => !v)}>
+        {isPlatformSuperAdmin ? <button className="primary-btn" onClick={() => setShowRoleForm((v) => !v)}>
           {showRoleForm ? 'Cerrar' : '+ Crear rol'}
-        </button>
+        </button> : null}
       </div>
 
-      {showRoleForm && (
+      {showRoleForm && isPlatformSuperAdmin && (
         <form className="form-panel" onSubmit={handleCreateRole}>
           <div className="field-grid">
             <label>
@@ -1771,16 +1868,19 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      {mobileMenuOpen ? <button type="button" className="mobile-nav-backdrop" aria-label="Cerrar menú de navegación" onClick={() => setMobileMenuOpen(false)} /> : null}
+      <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+        <div className="sidebar-mobile-header"><span>MENÚ PRINCIPAL</span><button type="button" aria-label="Cerrar menú" onClick={() => setMobileMenuOpen(false)}>×</button></div>
         <div className="brand" title="Heimdall · Guardián de Bifröst"><HeimdallMark /></div>
-        <nav className="side-menu">
+        <nav className="side-menu" id="primary-navigation" aria-label="Navegación principal">
           {menuBase.filter((item) => canAccess(item.key) || item.key === 'dashboard').map((item) => {
             const lockedByPlan = item.key === 'camaras' && !hasFeature('lpr');
             return (
             <button
               key={item.key}
               className={`nav-btn ${activeTab === item.key ? 'active' : ''} ${lockedByPlan ? 'locked' : ''}`}
-              onClick={() => setActiveTab(item.key)}
+              aria-current={activeTab === item.key ? 'page' : undefined}
+              onClick={() => { setActiveTab(item.key); setMobileMenuOpen(false); }}
               title={lockedByPlan ? `LPR/IA no está incluido en el plan ${session.user?.plan?.nombre || 'actual'}` : item.label}
             >
               <span className="nav-icon-wrap">{lockedByPlan ? <NavigationIcon name="seguridad" /> : <NavigationIcon name={item.key} />}</span>
@@ -1795,6 +1895,9 @@ function App() {
       <main className="workspace">
         <header className="topbar">
           <div className="topbar-left">
+            <button type="button" className="mobile-menu-toggle" aria-label={mobileMenuOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'} aria-expanded={mobileMenuOpen} aria-controls="primary-navigation" onClick={() => setMobileMenuOpen((open) => !open)}>
+              <span /><span /><span />
+            </button>
             <div className="product-lockup"><strong>HEIMDALL TECH</strong><small>CONTROL Y TRAZABILIDAD VEHICULAR</small></div>
             <div className="status-pill">{offlineMode ? 'Modo offline' : 'Online'}</div>
           </div>

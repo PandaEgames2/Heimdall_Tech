@@ -73,6 +73,7 @@ CREATE TABLE USUARIO (
     password_hash VARCHAR(255) NOT NULL,
     estado BOOLEAN NOT NULL DEFAULT TRUE,
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    permisos_excepciones JSON NULL,
     CONSTRAINT fk_usuario_establecimiento FOREIGN KEY (id_establecimiento)
         REFERENCES ESTABLECIMIENTO (id_establecimiento) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_usuario_rol FOREIGN KEY (id_rol)

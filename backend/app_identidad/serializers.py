@@ -79,6 +79,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "residente_unidad",
             "estado",
             "fecha_creacion",
+            "permisos_excepciones",
         )
 
     def validate_correo(self, value):
@@ -107,6 +108,8 @@ class UsuarioSerializer(serializers.ModelSerializer):
         id_rol = attrs.get("id_rol", getattr(self.instance, "id_rol", None))
         rol_id = getattr(id_rol, "id_rol", id_rol)
         platform_admin = is_platform_superadmin(request.user if request else None)
+        if "permisos_excepciones" in attrs and not platform_admin:
+            raise serializers.ValidationError({"permisos_excepciones": "Solo un Super Admin puede asignar excepciones de permisos."})
         role_is_unchanged = self.instance is not None and rol_id == self.instance.id_rol_id
         if not platform_admin and rol_id not in (2, 3, RESIDENTE_ROL_ID) and not role_is_unchanged:
             raise serializers.ValidationError(

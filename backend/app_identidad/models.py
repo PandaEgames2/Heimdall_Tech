@@ -30,6 +30,7 @@ class Usuario(models.Model):
     password_hash = models.CharField(max_length=255)
     estado = models.BooleanField(default=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
+    permisos_excepciones = models.JSONField(default=dict, blank=True, null=True)
 
     class Meta:
         db_table = "USUARIO"

@@ -10,6 +10,16 @@ class Command(BaseCommand):
             cursor.execute(
                 """
                 SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'USUARIO' AND COLUMN_NAME = 'permisos_excepciones'
+                """,
+                [connection.settings_dict["NAME"]],
+            )
+            if cursor.fetchone()[0] == 0:
+                cursor.execute("ALTER TABLE USUARIO ADD COLUMN permisos_excepciones JSON NULL")
+
+            cursor.execute(
+                """
+                SELECT COUNT(*) FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'VEHICULO' AND COLUMN_NAME = 'codigo_rfid'
                 """,
                 [connection.settings_dict["NAME"]],

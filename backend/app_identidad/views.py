@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 
 from config.mixins import EstablecimientoQueryParamMixin
 from config.tenant_utils import SUPER_ADMIN_ROL_ID, get_usuario_perfil, is_platform_superadmin
-from config.permissions import IsPlatformSuperAdmin, IsTenantAdmin
+from config.permissions import IsPlatformSuperAdminOrRoleReader, IsTenantAdmin
 from app_empresas.features import features_for_establecimiento
 
 from .models import Rol, Usuario
@@ -41,6 +41,7 @@ class PerfilUsuarioView(APIView):
             payload["id_establecimiento"] = perfil.id_establecimiento_id
             payload["rol"] = perfil.id_rol.nombre if perfil.id_rol else "Sin rol"
             payload["rol_id"] = perfil.id_rol_id if perfil.id_rol else None
+            payload["permisos_excepciones"] = perfil.permisos_excepciones or {}
             payload["is_platform_superadmin"] = perfil.id_rol_id == SUPER_ADMIN_ROL_ID
             payload["establecimiento"] = establecimiento.nombre
             payload["plan"] = {
@@ -58,7 +59,7 @@ class RolViewSet(EstablecimientoQueryParamMixin, viewsets.ModelViewSet):
     lookup_field = "id_rol"
     search_fields = ("nombre", "descripcion")
     ordering_fields = ("nombre",)
-    permission_classes = [IsPlatformSuperAdmin]
+    permission_classes = [IsPlatformSuperAdminOrRoleReader]
 
     def get_base_queryset(self):
         return Rol.objects.all().order_by("nombre")

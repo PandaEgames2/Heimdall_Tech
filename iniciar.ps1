@@ -1,4 +1,4 @@
-# Heimdall Tech — requiere MySQL activo; inicia backend + frontend
+﻿# Heimdall Tech — requiere MySQL activo; inicia backend + frontend
 # Uso: powershell -ExecutionPolicy Bypass -File .\iniciar.ps1
 # Requiere: MySQL en ejecución, Python 3.12+, Node.js 20.19+ o 22.12+
 
@@ -13,8 +13,13 @@ $Python = $null
 Write-Host "== Heimdall Tech: preparando entorno ==" -ForegroundColor Cyan
 
 if (Test-Path $VenvPython) {
-    $null = & $VenvPython -c "import django, rest_framework, mysql.connector" 2>$null
-    if ($LASTEXITCODE -eq 0) { $Python = $VenvPython }
+    try {
+        $null = & $VenvPython -c "import django, rest_framework, mysql.connector" 2>$null
+        if ($LASTEXITCODE -eq 0) { $Python = $VenvPython }
+    } catch {
+        # A moved virtual environment may contain a launcher pointing to an old Python path.
+        $Python = $null
+    }
 }
 
 if (-not $Python) {
@@ -43,7 +48,7 @@ if (-not $Python) {
         $LocalAlprPackages = Join-Path $Backend ".alpr_runtime"
         if ((Test-Path $CodexPython) -and (Test-Path $VenvPackages)) {
             $PythonPaths = @($VenvPackages)
-            if (Test-Path $LocalAlprPackages) { $PythonPaths = @($LocalAlprPackages) + $PythonPaths }
+            if (Test-Path $LocalAlprPackages) { $PythonPaths = $PythonPaths + @($LocalAlprPackages) }
             $env:PYTHONPATH = [string]::Join([IO.Path]::PathSeparator, $PythonPaths)
             $Python = $CodexPython
             $null = & $Python -c "import django, rest_framework, mysql.connector" 2>$null
@@ -59,9 +64,11 @@ if (-not $Python) {
     }
 }
 
-if (-not (Test-Path (Join-Path $Backend ".env"))) {
-    Copy-Item (Join-Path $Backend ".env.example") (Join-Path $Backend ".env")
-    Write-Host "Se creó backend\.env — revisa DB_PASSWORD si MySQL falla." -ForegroundColor Yellow
+$BackendEnv = Join-Path $Backend ".env"
+$BackendEnvExample = Join-Path $Backend ".env.example"
+if (-not (Test-Path -LiteralPath $BackendEnv)) {
+    Copy-Item -LiteralPath $BackendEnvExample -Destination $BackendEnv
+    Write-Host "Se creó backend\.env. Revisa DB_PASSWORD si MySQL falla." -ForegroundColor Yellow
 }
 
 Write-Host "Verificando conexión a MySQL (no se reiniciarán los datos)..."
