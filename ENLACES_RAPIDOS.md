@@ -21,15 +21,16 @@ Instalación nueva y pasos de base de datos: [README principal](README.md). No e
 
 ## Endpoints de la API
 
-La mayoría de endpoints de negocio requieren un token JWT. Los endpoints multiestablecimiento usan `id_establecimiento` para seleccionar el ámbito autorizado del usuario.
+La mayoría de endpoints de negocio requieren un token JWT. Los endpoints multiestablecimiento usan `id_establecimiento` para seleccionar el ámbito autorizado del usuario. El login devuelve el access token y guarda el refresh en una cookie `HttpOnly`; el frontend no persiste tokens en `localStorage`.
 
 ### Identidad
 
 - `POST /api/identidad/auth/login/`
-- `POST /api/identidad/auth/refresh/`
-- `GET /api/profile/`
+- `POST /api/identidad/auth/refresh/` (usa la cookie `HttpOnly`)
+- `POST /api/identidad/auth/logout/` (revoca el refresh y borra la cookie)
+- `GET /api/profile/` (rol, permisos efectivos, acciones y menú)
 - `GET /api/identidad/usuarios/?id_establecimiento=1`
-- `/api/identidad/roles/` (solo Super Admin)
+- `/api/identidad/roles/` (lectura/escritura según permisos; escritura solo Super Admin)
 
 ### Empresas
 

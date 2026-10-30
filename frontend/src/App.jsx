@@ -1,36 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserQRCodeReader } from '@zxing/browser';
 import { QRCodeSVG } from 'qrcode.react';
+import Sidebar from './components/Sidebar';
+import LandingPage from './features/landing/LandingPage';
+import RoleManagement from './features/rbac/RoleManagement';
+import UserManagement from './features/rbac/UserManagement';
+import { apiFetch, apiRequest as authFetch, loginRequest, logoutRequest, refreshSession } from './lib/api';
+import { navigate, usePathname } from './lib/router';
 import './App.css';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:8000/api`;
-const SUPER_ADMIN_ROL_ID = 4;
-const EMPTY_PERMISSION_OVERRIDES = Object.freeze({});
-
-const permissionsByRole = {
-  superadmin: ['dashboard', 'usuarios', 'roles', 'catalogos', 'reportes', 'camaras', 'seguridad', 'config', 'accesos'],
-  admin: ['dashboard', 'usuarios', 'catalogos', 'reportes', 'camaras', 'accesos'],
-  supervisor: ['dashboard', 'reportes', 'camaras', 'accesos'],
-  vigilante: ['dashboard', 'camaras', 'accesos'],
-  residente: ['mi_qr'],
-  'sin rol': ['dashboard'],
-};
-
-const normalizeRoleFromUser = (user) => {
-  if (!user) return 'vigilante';
-  if (user.rol_id === SUPER_ADMIN_ROL_ID || user.is_platform_superadmin) return 'superadmin';
-  if (user.rol_id === 2) return 'vigilante';
-  if (user.rol_id === 3) return 'supervisor';
-  if (user.rol_id === 1) return 'admin';
-  if (user.rol_id === 5) return 'residente';
-  const str = String(user.rol || '').trim().toLowerCase();
-  if (str.includes('super admin') || str === 'super admin') return 'superadmin';
-  if (str.includes('vigilante')) return 'vigilante';
-  if (str.includes('supervisor')) return 'supervisor';
-  if (str.includes('administrador')) return 'admin';
-  if (str.includes('residente')) return 'residente';
-  return 'vigilante';
-};
+import './features/rbac/rbac.css';
 
 function QRScanner({ onDetected }) {
   const videoRef = useRef(null);
@@ -105,19 +83,6 @@ function QRScanner({ onDetected }) {
   );
 }
 
-function HeimdallMark() {
-  return (
-    <svg className="heimdall-mark" viewBox="0 0 48 48" role="img" aria-label="El ojo vigilante de Heimdall">
-      <path className="watcher-arch" d="M7 26a17 17 0 0 1 34 0" />
-      <path className="watcher-ray" d="M13 19a12 12 0 0 1 22 0" />
-      <path className="watcher-eye" d="M6 30s7-9 18-9 18 9 18 9-7 9-18 9S6 30 6 30Z" />
-      <circle className="watcher-iris" cx="24" cy="30" r="5.2" />
-      <circle className="watcher-glint" cx="26" cy="28" r="1.35" />
-      <path className="watcher-bifrost" d="M16 43h16" />
-    </svg>
-  );
-}
-
 function PlateCamera({ onCapture, processing }) {
   const videoRef = useRef(null);
   const [cameraError, setCameraError] = useState('');
@@ -186,56 +151,19 @@ function PlateCamera({ onCapture, processing }) {
   );
 }
 
-const menuBase = [
-  { key: 'dashboard', label: 'Dashboard', icon: '⌂' },
-  { key: 'accesos', label: 'Control de acceso', icon: '✓' },
-  { key: 'camaras', label: 'Cámaras', icon: '◉' },
-  { key: 'usuarios', label: 'Usuarios', icon: '◌' },
-  { key: 'roles', label: 'Roles', icon: '⚙' },
-  { key: 'catalogos', label: 'Catálogo', icon: '▣' },
-  { key: 'reportes', label: 'Reportes', icon: '◫' },
-  { key: 'mi_qr', label: 'Mi QR e invitados', icon: '▦' },
-  { key: 'seguridad', label: 'Seguridad', icon: '⛨' },
-];
-
-function NavigationIcon({ name }) {
-  const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' };
-  const accent = <path className="nav-icon-accent" d="M5 19h14" />;
-  const shapes = {
-    // Heimdall iconography: Nordic realm gate, Gjallarhorn, watchful eyes,
-    // the people under his watch, rune scroll, and Odin's raven reports.
-    dashboard: <><path d="M3 20h18M5 20V10l7-7 7 7v10M8 20v-7a4 4 0 0 1 8 0v7M10 14h4M12 13v7M3 10h4m10 0h4" /><path d="m4 7 2 1m14-1-2 1M7 5l2 2m8-2-2 2" />{accent}</>,
-    accesos: <><path d="M3 17.5c3.7-.2 6.2-2 8-5.8l2.5-5.2c.6-1.2 2.1-1.2 2.7 0l1 2.2c.5 1 1.6 1.4 2.6 1l1.2-.5-1.1 3c-1 2.8-3 4.3-6 3.8l-2.6-.4M4 18h8" /><path d="m14.5 7.7 1.4.6m-3.1 2 1.4.7m-3 1.6 1.5.7m6.1-2.9 1.3.1" />{accent}</>,
-    camaras: <><path d="M2 9c2.4-2.3 4.5-3.4 6.8-3.4C11.7 5.6 14 9 14 9s-2.3 3.4-5.2 3.4C6.5 12.4 4.4 11.3 2 9Z" /><circle cx="8.8" cy="9" r="1.5" /><path d="M10 15c2.2-2.3 4.2-3.4 6.5-3.4 2.8 0 5 3.4 5 3.4s-2.2 3.4-5 3.4c-2.3 0-4.3-1.1-6.5-3.4Z" /><circle cx="16.5" cy="15" r="1.5" /><path d="m4 4-1-1m8 0-1 1m7 7 1-2m3 7h1" />{accent}</>,
-    usuarios: <><circle cx="12" cy="7" r="2.3" /><path d="M7.5 17.5c.4-2.7 1.9-4.2 4.5-4.2s4.1 1.5 4.5 4.2" /><circle cx="5.2" cy="9.2" r="1.7" /><path d="M2.5 16c.2-1.8 1.1-2.8 2.7-3M18.8 9.2a1.7 1.7 0 1 0 0-3.4M18.8 13c1.6.2 2.5 1.2 2.7 3" />{accent}</>,
-    // Tiwaz (ᛏ): a clear rune silhouette to signal leadership and authority.
-    roles: <><path d="M12 4v16M12 4 6 10m6-6 6 6" />{accent}</>,
-    catalogos: <><path d="M5 5c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V5Zm0 1H3v12h2M7 3v2m10-2v2m-6 4v6m0-6-2 2m2-2 2 2" /><path d="M8 17h8" />{accent}</>,
-    reportes: <><path d="M12 20V8m0 3C9 6 5 5 2.5 6.5 4 11 7.2 13.5 12 14m0-3c3-5 7-6 9.5-4.5C20 11 16.8 13.5 12 14M12 16c-2-2.5-4.5-3.2-7.5-2.8 1.3 3.4 3.8 5.2 7.5 5.4m0-2.6c2-2.5 4.5-3.2 7.5-2.8-1.3 3.4-3.8 5.2-7.5 5.4" /><path d="M11 5.5 13 4l2 1.5-2 1.5-2-1.5Z" />{accent}</>,
-    mi_qr: <><path d="M3.5 3.5h6v6h-6zM14.5 3.5h6v6h-6zM3.5 14.5h6v6h-6zM14.5 14.5h2v2h-2zM18.5 14.5h2v6h-2zM14.5 18.5h2" />{accent}</>,
-    seguridad: <><path d="M12 2.8 20 6v5.5c0 4.8-3.2 8-8 9.8-4.8-1.8-8-5-8-9.8V6l8-3.2Z" /><path d="m8.5 12 2.2 2.2 4.8-5" />{accent}</>,
-  };
-  return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true" {...common}>{shapes[name] || shapes.catalogos}</svg>;
-}
-
 const readSession = () => {
   try {
     const raw = localStorage.getItem('heimdall_session');
-    if (!raw) return { loggedIn: false, user: null, accessToken: '', refreshToken: '' };
+    if (!raw) return { user: null };
     const parsed = JSON.parse(raw);
-    return {
-      loggedIn: Boolean(parsed.accessToken),
-      user: parsed.user || null,
-      accessToken: parsed.accessToken || '',
-      refreshToken: parsed.refreshToken || '',
-    };
+    return { user: parsed.user || null };
   } catch {
-    return { loggedIn: false, user: null, accessToken: '', refreshToken: '' };
+    return { user: null };
   }
 };
 
 const saveSession = (session) => {
-  localStorage.setItem('heimdall_session', JSON.stringify(session));
+  localStorage.setItem('heimdall_session', JSON.stringify({ user: session.user || null }));
 };
 
 const clearSession = () => {
@@ -262,121 +190,6 @@ const planFeatures = (plan) => {
   };
 };
 
-const apiErrorMessage = (payload, fallback) => {
-  const body = payload?.message ?? payload;
-  if (typeof body === 'string') return body;
-  if (body?.detail) return body.detail;
-  if (Array.isArray(body?.non_field_errors)) return body.non_field_errors[0];
-  if (body && typeof body === 'object') {
-    const firstValue = Object.values(body).flat(2).find((value) => typeof value === 'string');
-    if (firstValue) return firstValue;
-  }
-  return fallback;
-};
-
-const apiFetch = async (path, options = {}) => {
-  const headers = { ...(options.headers || {}) };
-  const token = readSession().accessToken || localStorage.getItem('heimdall_session');
-  if (!headers.Authorization && token) {
-    if (typeof token === 'string' && token.split('.').length === 3) {
-      headers.Authorization = `Bearer ${token}`;
-    } else if (typeof token === 'string') {
-      try {
-        const parsed = JSON.parse(token);
-        if (parsed.accessToken) headers.Authorization = `Bearer ${parsed.accessToken}`;
-      } catch {
-        // A malformed saved session should fail as an API authorization error.
-      }
-    }
-  }
-  if (!headers['Content-Type'] && options.body) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
-
-  const text = await response.text();
-  let payload = {};
-  if (text) {
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = { raw: text };
-    }
-  }
-
-  if (!response.ok) {
-    throw new Error(apiErrorMessage(payload, 'Error de API'));
-  }
-
-  return payload;
-};
-
-const roleIdMap = {
-  superadmin: SUPER_ADMIN_ROL_ID,
-  admin: 1,
-  supervisor: 3,
-  vigilante: 2,
-  residente: 5,
-};
-
-const listRoleNames = {
-  1: 'Administrador',
-  2: 'Vigilante',
-  3: 'Supervisor',
-  5: 'Residente',
-};
-
-const permissionExceptionOptions = [
-  { key: 'usuarios', label: 'Usuarios', hint: 'Gestionar las cuentas del establecimiento' },
-  { key: 'roles', label: 'Roles', hint: 'Consultar o administrar roles' },
-  { key: 'catalogos', label: 'Catálogo', hint: 'Consultar los catálogos del sistema' },
-  { key: 'reportes', label: 'Reportes', hint: 'Consultar actividad y reportes' },
-  { key: 'camaras', label: 'Cámaras', hint: 'Acceder a las cámaras' },
-  { key: 'seguridad', label: 'Seguridad', hint: 'Consultar el panel de seguridad' },
-  { key: 'config', label: 'Configuración', hint: 'Acceder a la configuración' },
-  { key: 'accesos', label: 'Control de acceso', hint: 'Registrar y consultar accesos' },
-  { key: 'mi_qr', label: 'Mi QR e invitados', hint: 'Acceder a invitaciones y QR' },
-];
-
-const userPermissionLabels = {
-  puede_editar: 'Permiso de edición',
-  solo_lectura: 'Solo lectura',
-};
-
-const defaultUserForm = {
-  nombre: '',
-  email: '',
-  password: '',
-  rol: 'vigilante',
-  id_establecimiento: '',
-  residente_documento: '',
-  residente_telefono: '',
-  residente_unidad: '',
-  permisos_excepciones: {},
-};
-
-const defaultRoleForm = {
-  nombre: '',
-  permisos: ['dashboard'],
-};
-
-const permissionCatalog = {
-  dashboard: 'Dashboard',
-  usuarios: 'Usuarios',
-  roles: 'Roles',
-  catalogos: 'Catálogo',
-  reportes: 'Reportes',
-  camaras: 'Cámaras',
-  seguridad: 'Seguridad',
-  config: 'Configuración',
-  accesos: 'Control de acceso',
-  mi_qr: 'Mi QR e invitados',
-};
-
 const detailFieldLabels = {
   id_establecimiento: 'Establecimiento', id_vehiculo: 'Vehículo', id_usuario: 'Usuario',
   id_movimiento: 'Movimiento', id_dispositivo: 'Dispositivo', placa_leida: 'Placa leída',
@@ -391,12 +204,13 @@ const detailFieldLabels = {
 
 function App() {
   const initialSession = readSession();
+  const pathname = usePathname();
+  const isLandingRoute = pathname === '/';
+  const isLoginRoute = pathname === '/login';
+  const isAppRoute = !isLandingRoute && !isLoginRoute;
   const [session, setSession] = useState(initialSession);
-  const [debugViewRole, setDebugViewRole] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [users, setUsers] = useState([]);
-  const [roles, setRoles] = useState([]);
   const [catalogData, setCatalogData] = useState({
     planes: [], establecimientos: [], vehiculos: [], responsables: [],
     planesCount: 0, establecimientosCount: 0, vehiculosCount: 0,
@@ -427,15 +241,8 @@ function App() {
   const [vehicleFormOpen, setVehicleFormOpen] = useState(false);
   const [vehicleForm, setVehicleForm] = useState({ placa: '', marca: '', modelo: '', color: '', codigo_rfid: '', tipo_autorizacion: 'AUTORIZADO', id_responsable: '' });
   const [offlineMode, setOfflineMode] = useState(!navigator.onLine);
-  const [loading, setLoading] = useState(Boolean(initialSession.accessToken));
+  const [loading, setLoading] = useState(Boolean(initialSession.user));
   const [error, setError] = useState('');
-  const [showUserForm, setShowUserForm] = useState(false);
-  const [editingUserId, setEditingUserId] = useState(null);
-  const [userModalTab, setUserModalTab] = useState('account');
-  const [userSearch, setUserSearch] = useState('');
-  const [showRoleForm, setShowRoleForm] = useState(false);
-  const [userForm, setUserForm] = useState(defaultUserForm);
-  const [roleForm, setRoleForm] = useState(defaultRoleForm);
   const [reportData, setReportData] = useState({
     movimientos: [],
     incidencias: [],
@@ -445,50 +252,21 @@ function App() {
     reconocimientosCount: 0,
   });
 
-  const isPlatformSuperAdmin = Boolean(
-    session.user?.is_platform_superadmin || session.user?.rol_id === SUPER_ADMIN_ROL_ID,
+  const isPlatformSuperAdmin = Boolean(session.user?.is_platform_superadmin);
+  const isResident = session.user?.rol === 'Residente' || Number(session.user?.rol_id) === 5;
+  const effectivePermissions = useMemo(
+    () => (Array.isArray(session.user?.permisos_efectivos) ? session.user.permisos_efectivos : []),
+    [session.user?.permisos_efectivos],
   );
-  const actualRole = useMemo(() => normalizeRoleFromUser(session.user), [session.user]);
-  const effectiveRole = isPlatformSuperAdmin && debugViewRole ? debugViewRole : actualRole;
-  const permissions = useMemo(
-    () => permissionsByRole[effectiveRole] || permissionsByRole.vigilante,
-    [effectiveRole],
-  );
-  const hasFeature = (feature) => Boolean(isPlatformSuperAdmin || session.user?.funcionalidades?.[feature]);
-  const ownOverrides = session.user?.permisos_excepciones || EMPTY_PERMISSION_OVERRIDES;
-  const effectivePermissions = useMemo(() => {
-    const next = new Set(permissions);
-    Object.entries(ownOverrides).forEach(([key, allowed]) => {
-      if (!permissionCatalog[key]) return;
-      if (allowed) next.add(key);
-      else next.delete(key);
-    });
-    return [...next];
-  }, [permissions, ownOverrides]);
   const canAccess = (key) => effectivePermissions.includes(key);
-  const canEdit = isPlatformSuperAdmin || (ownOverrides.puede_editar !== false && ownOverrides.solo_lectura !== true);
+  const hasFeature = (feature) => Boolean(isPlatformSuperAdmin || session.user?.funcionalidades?.[feature]);
 
   useEffect(() => {
-    if (actualRole === 'residente' && activeTab !== 'mi_qr' && !effectivePermissions.includes(activeTab)) {
-      setActiveTab('mi_qr');
-    }
-  }, [actualRole, activeTab, effectivePermissions]);
-
-  const assignableRoleOptions = useMemo(() => {
-    const base = [
-      { value: 'supervisor', label: 'Supervisor' },
-      { value: 'vigilante', label: 'Vigilante' },
-      { value: 'residente', label: 'Residente' },
-    ];
-    if (isPlatformSuperAdmin) {
-      return [
-        { value: 'superadmin', label: 'Super Admin' },
-        { value: 'admin', label: 'Administrador de establecimiento' },
-        ...base,
-      ];
-    }
-    return base;
-  }, [isPlatformSuperAdmin]);
+    if (!session.user) return;
+    if (effectivePermissions.includes(activeTab)) return;
+    const fallback = session.user?.menu?.find((item) => item.visible !== false)?.key || 'dashboard';
+    setActiveTab(effectivePermissions.includes(fallback) ? fallback : 'dashboard');
+  }, [session.user, activeTab, effectivePermissions]);
 
   useEffect(() => {
     const handleOnline = () => setOfflineMode(false);
@@ -502,26 +280,6 @@ function App() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
-
-  useEffect(() => {
-    if (!showUserForm) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') {
-        setShowUserForm(false);
-        setEditingUserId(null);
-        setUserForm(defaultUserForm);
-        setUserModalTab('account');
-        setError('');
-      }
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [showUserForm]);
 
   useEffect(() => {
     if (!mobileMenuOpen) return undefined;
@@ -538,66 +296,72 @@ function App() {
   }, [mobileMenuOpen]);
 
   useEffect(() => {
-    if (!session.accessToken) {
-      return undefined;
-    }
-
     let isMounted = true;
-    const hydrateProfile = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/profile/`, {
-          headers: {
-            Authorization: `Bearer ${session.accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        });
 
-        if (!response.ok) throw new Error('Token inválido');
+    const bootstrapSession = async () => {
+      const stored = readSession();
+      if (!stored.user) {
+        if (isMounted) setLoading(false);
+        return;
+      }
 
-        const payload = await response.json();
-        const savedSession = readSession();
-        const nextSession = {
-          ...savedSession,
-          loggedIn: true,
-          user: {
-            ...savedSession.user,
-            ...payload,
-            nombre: payload.nombre || payload.username || 'Usuario',
-          },
-        };
-
-        if (isMounted) {
-          setSession(nextSession);
-          saveSession(nextSession);
-        }
-      } catch {
+      const renewed = await refreshSession();
+      if (!renewed) {
         clearSession();
         if (isMounted) {
-          setSession({ loggedIn: false, user: null, accessToken: '', refreshToken: '' });
+          setSession({ user: null });
+          setLoading(false);
         }
+        return;
+      }
+
+      try {
+        const profile = await apiFetch('/profile/');
+        if (!isMounted) return;
+        const nextSession = {
+          user: { ...profile, nombre: profile.nombre || profile.username || 'Usuario' },
+        };
+        setSession(nextSession);
+        saveSession(nextSession);
+      } catch {
+        clearSession();
+        if (isMounted) setSession({ user: null });
       } finally {
         if (isMounted) setLoading(false);
       }
     };
 
-    hydrateProfile();
+    bootstrapSession();
     return () => {
       isMounted = false;
     };
-  }, [session.accessToken]);
+  }, []);
+
+  const sessionUserId = session.user?.id_usuario ?? session.user?.id;
 
   useEffect(() => {
-    if (!session.accessToken) return undefined;
+    if (session.user && (isLandingRoute || isLoginRoute)) {
+      navigate('/panel', { replace: true });
+      return;
+    }
+    if (!session.user && isAppRoute) {
+      navigate('/login', { replace: true });
+    }
+  }, [session.user, isLandingRoute, isLoginRoute, isAppRoute]);
+
+  useEffect(() => {
+    if (!sessionUserId) return undefined;
     const refreshOwnPermissions = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/profile/`, {
-          headers: { Authorization: `Bearer ${session.accessToken}`, 'Content-Type': 'application/json' },
-        });
-        if (!response.ok) return;
-        const profile = await response.json();
+        const profile = await apiFetch('/profile/');
         setSession((current) => {
-          if (current.accessToken !== session.accessToken) return current;
-          const nextUser = { ...current.user, ...profile };
+          const currentId = current.user?.id_usuario ?? current.user?.id;
+          if (currentId !== sessionUserId) return current;
+          const nextUser = {
+            ...current.user,
+            ...profile,
+            nombre: profile.nombre || profile.username || current.user?.nombre || 'Usuario',
+          };
           if (JSON.stringify(nextUser) === JSON.stringify(current.user)) return current;
           const nextSession = { ...current, user: nextUser };
           saveSession(nextSession);
@@ -618,88 +382,57 @@ function App() {
       document.removeEventListener('visibilitychange', refreshWhenVisible);
       window.clearInterval(refreshTimer);
     };
-  }, [session.accessToken]);
+  }, [sessionUserId]);
 
   useEffect(() => {
-    if (!session.loggedIn || !session.accessToken) return;
+    if (!session.user) return undefined;
 
     const establecimientoId = session.user?.id_establecimiento;
     if (!establecimientoId) {
-      return;
+      return undefined;
     }
-    const options = {
-      headers: {
-        Authorization: `Bearer ${session.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-    };
 
     const loadDashboardData = async () => {
       try {
-        const canReadReports = effectivePermissions.includes('reportes')
-          || (actualRole !== 'residente' && ownOverrides.reportes !== false);
+        const canReadReports = effectivePermissions.includes('reportes');
         const canReadSecurity = effectivePermissions.includes('seguridad');
         const dataRequests = canReadReports ? [
-          ['movimientos', fetch(`${API_BASE_URL}/operaciones/movimientos/?id_establecimiento=${establecimientoId}`, options)],
-          ['incidencias', fetch(`${API_BASE_URL}/operaciones/incidencias/?id_establecimiento=${establecimientoId}`, options)],
+          ['movimientos', authFetch(`/operaciones/movimientos/?id_establecimiento=${establecimientoId}`)],
+          ['incidencias', authFetch(`/operaciones/incidencias/?id_establecimiento=${establecimientoId}`)],
         ] : canReadSecurity ? [
-          ['incidencias', fetch(`${API_BASE_URL}/operaciones/incidencias/?id_establecimiento=${establecimientoId}&permiso=seguridad`, options)],
+          ['incidencias', authFetch(`/operaciones/incidencias/?id_establecimiento=${establecimientoId}&permiso=seguridad`)],
         ] : [];
         if (canReadReports && (isPlatformSuperAdmin || session.user?.funcionalidades?.lpr)) {
-          dataRequests.push(['reconocimientos', fetch(`${API_BASE_URL}/inteligencia/reconocimientos/?id_establecimiento=${establecimientoId}`, options)]);
-        }
-        if (effectivePermissions.includes('usuarios')) {
-          dataRequests.push(['usuarios', fetch(`${API_BASE_URL}/identidad/usuarios/?id_establecimiento=${establecimientoId}`, options)]);
+          dataRequests.push(['reconocimientos', authFetch(`/inteligencia/reconocimientos/?id_establecimiento=${establecimientoId}`)]);
         }
         if (effectivePermissions.includes('catalogos')) {
-          dataRequests.push(['planes', fetch(`${API_BASE_URL}/empresas/planes/`, options)]);
-          dataRequests.push(['establecimientos', fetch(`${API_BASE_URL}/empresas/establecimientos/`, options)]);
-          dataRequests.push(['vehiculos', fetch(`${API_BASE_URL}/operaciones/vehiculos/?id_establecimiento=${establecimientoId}`, options)]);
-          dataRequests.push(['responsables', fetch(`${API_BASE_URL}/operaciones/responsables/?id_establecimiento=${establecimientoId}`, options)]);
+          dataRequests.push(['planes', authFetch('/empresas/planes/')]);
+          dataRequests.push(['establecimientos', authFetch('/empresas/establecimientos/')]);
+          dataRequests.push(['vehiculos', authFetch(`/operaciones/vehiculos/?id_establecimiento=${establecimientoId}`)]);
+          dataRequests.push(['responsables', authFetch(`/operaciones/responsables/?id_establecimiento=${establecimientoId}`)]);
         } else if (effectivePermissions.includes('accesos')) {
-          dataRequests.push(['vehiculos', fetch(`${API_BASE_URL}/operaciones/vehiculos/?id_establecimiento=${establecimientoId}&permiso=accesos`, options)]);
+          dataRequests.push(['vehiculos', authFetch(`/operaciones/vehiculos/?id_establecimiento=${establecimientoId}&permiso=accesos`)]);
         }
         if (effectivePermissions.includes('accesos')) {
-          dataRequests.push(['invitaciones', fetch(`${API_BASE_URL}/operaciones/invitaciones-visitantes/?id_establecimiento=${establecimientoId}`, options)]);
+          dataRequests.push(['invitaciones', authFetch(`/operaciones/invitaciones-visitantes/?id_establecimiento=${establecimientoId}`)]);
         }
-        if (effectivePermissions.includes('roles')) dataRequests.push(['roles', fetch(`${API_BASE_URL}/identidad/roles/`, options)]);
         const responses = await Promise.all(dataRequests.map(([, request]) => request));
         const failedResponse = responses.find((response) => !response.ok);
         if (failedResponse) throw new Error(`La API rechazó la carga de datos (${failedResponse.status}).`);
 
-        const loadedData = await Promise.all(dataRequests.map(async ([key, request]) => [key, await (await request).json()]));
+        const loadedData = await Promise.all(
+          dataRequests.map(async ([key], index) => [key, await responses[index].json()]),
+        );
         const dataByKey = Object.fromEntries(loadedData);
-        const usuariosData = dataByKey.usuarios || { results: [] };
         const movimientosData = dataByKey.movimientos || { results: [], count: 0 };
         const incidenciasData = dataByKey.incidencias || { results: [], count: 0 };
         const reconocimientosData = dataByKey.reconocimientos || { results: [], count: 0 };
-        const rolesData = dataByKey.roles || { results: [] };
         const planesData = dataByKey.planes || { results: [] };
         const establecimientosData = dataByKey.establecimientos || { results: [] };
         const vehiculosData = dataByKey.vehiculos || { results: [] };
         const responsablesData = dataByKey.responsables || { results: [] };
         const invitacionesData = dataByKey.invitaciones || { results: [] };
 
-        const usuarios = normalizeListResponse(usuariosData).map((u) => ({
-          id: u.id_usuario,
-          nombre: u.nombre,
-          rol: u.rol?.nombre || listRoleNames[u.id_rol] || u.id_rol || 'Sin rol',
-          rolId: u.id_rol,
-          email: u.correo,
-          estado: u.estado ? 'Activo' : 'Inactivo',
-          activo: Boolean(u.estado),
-          permisos_excepciones: u.permisos_excepciones || {},
-        }));
-
-        const rolesList = normalizeListResponse(rolesData).map((roleItem) => ({
-          nombre: roleItem.nombre,
-          permisos: Array.isArray(roleItem.permisos)
-            ? roleItem.permisos
-            : ['dashboard', 'reportes', 'camaras'],
-        }));
-
-        setUsers(usuarios);
-        setRoles(rolesList);
         if (effectivePermissions.includes('accesos')) setVisitorInvitations(normalizeListResponse(invitacionesData));
         setCatalogData({
           planes: normalizeListResponse(planesData),
@@ -722,10 +455,8 @@ function App() {
         }
         setError('');
       } catch (loadError) {
-        setUsers([]);
-        setRoles([]);
-        setCatalogData({ planes: [], establecimientos: [], vehiculos: [], planesCount: 0, establecimientosCount: 0, vehiculosCount: 0 });
-        if ((actualRole !== 'residente' && ownOverrides.reportes !== false) || effectivePermissions.includes('seguridad')) {
+        setCatalogData({ planes: [], establecimientos: [], vehiculos: [], responsables: [], planesCount: 0, establecimientosCount: 0, vehiculosCount: 0 });
+        if (effectivePermissions.includes('reportes') || effectivePermissions.includes('seguridad')) {
           setReportData({ movimientos: [], incidencias: [], reconocimientos: [], movimientosCount: 0, incidenciasCount: 0, reconocimientosCount: 0 });
         }
         setError(loadError.message || 'No se pudieron cargar los datos del establecimiento.');
@@ -733,10 +464,10 @@ function App() {
     };
 
     loadDashboardData();
-  }, [session.loggedIn, session.accessToken, session.user?.id_establecimiento, session.user?.funcionalidades?.lpr, isPlatformSuperAdmin, effectivePermissions, actualRole]);
+  }, [session.user, isPlatformSuperAdmin, effectivePermissions]);
 
   useEffect(() => {
-    if (!session.loggedIn || actualRole !== 'residente' || !session.accessToken) return undefined;
+    if (!isResident) return undefined;
     const establishmentId = session.user?.id_establecimiento;
     if (!establishmentId) return undefined;
     let cancelled = false;
@@ -758,7 +489,6 @@ function App() {
       try {
         const qr = await apiFetch('/operaciones/qr/residente/', {
           method: 'POST',
-          headers: { Authorization: `Bearer ${session.accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(residentQrVehicle ? { id_vehiculo: residentQrVehicle } : {}),
         });
         if (!cancelled) setResidentQr(qr);
@@ -773,7 +503,7 @@ function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [session.loggedIn, session.accessToken, session.user?.id_establecimiento, actualRole, residentQrVehicle]);
+  }, [isResident, session.user?.id_establecimiento, residentQrVehicle]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -791,38 +521,21 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/identidad/auth/login/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const responseText = await response.text();
-      let payload = {};
-
-      if (responseText) {
-        try {
-          payload = JSON.parse(responseText);
-        } catch {
-          throw new Error('La API respondió con contenido HTML. Verifica que el backend esté levantado y accesible en la red local.');
-        }
-      }
-
-      if (!response.ok) {
-        throw new Error(apiErrorMessage(payload, 'Credenciales inválidas'));
-      }
-
+      const payload = await loginRequest(username, password);
+      const profile = payload.profile || {};
       const nextSession = {
-        loggedIn: true,
-        user: payload.user,
-        accessToken: payload.access,
-        refreshToken: payload.refresh,
+        user: {
+          ...payload.user,
+          ...profile,
+          nombre: profile.nombre || payload.user?.nombre || payload.user?.username || 'Usuario',
+        },
       };
-
       setSession(nextSession);
-      setDebugViewRole('');
       saveSession(nextSession);
-      setActiveTab('dashboard');
+      navigate('/panel', { replace: true });
+      const firstVisible = profile.menu?.find((item) => item.visible !== false)?.key;
+      setActiveTab(firstVisible || 'dashboard');
+      setError('');
     } catch (loginError) {
       setError(loginError.message || 'No se pudo iniciar sesión.');
     } finally {
@@ -830,118 +543,33 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
+  const refreshProfile = async () => {
+    try {
+      const profile = await apiFetch('/profile/');
+      setSession((current) => {
+        if (!current.user) return current;
+        const nextSession = {
+          user: {
+            ...current.user,
+            ...profile,
+            nombre: profile.nombre || profile.username || current.user.nombre || 'Usuario',
+          },
+        };
+        saveSession(nextSession);
+        return nextSession;
+      });
+    } catch {
+      // Non-blocking: the periodic profile refresh will retry.
+    }
+  };
+
+  const handleLogout = async () => {
+    await logoutRequest();
     clearSession();
-    setSession({ loggedIn: false, user: null, accessToken: '', refreshToken: '' });
-    setDebugViewRole('');
+    setSession({ user: null });
     setActiveTab('dashboard');
     setError('');
-  };
-
-  const handleCreateUser = async (event) => {
-    event.preventDefault();
-    if (!userForm.nombre || !userForm.email) {
-      setError('Completa nombre y correo para crear el usuario.');
-      return;
-    }
-
-    try {
-      const establecimientoId = isPlatformSuperAdmin
-        ? (userForm.id_establecimiento || session.user?.id_establecimiento)
-        : session.user?.id_establecimiento;
-      if (!establecimientoId) throw new Error('La cuenta no tiene un establecimiento asociado.');
-      const payload = editingUserId
-        ? {
-          nombre: userForm.nombre.trim(),
-          correo: userForm.email.trim(),
-          id_rol: roleIdMap[userForm.rol],
-          estado: Boolean(userForm.estado),
-          ...(isPlatformSuperAdmin ? { permisos_excepciones: userForm.permisos_excepciones || {} } : {}),
-        }
-        : {
-          id_establecimiento: establecimientoId,
-          id_rol: roleIdMap[userForm.rol] || 2,
-          nombre: userForm.nombre.trim(),
-          correo: userForm.email.trim(),
-          password: userForm.password,
-          estado: true,
-        };
-      if (editingUserId && userForm.password.trim()) payload.password = userForm.password;
-      if (!editingUserId && userForm.rol === 'residente') {
-        payload.residente_documento = userForm.residente_documento;
-        payload.residente_telefono = userForm.residente_telefono;
-        payload.residente_unidad = userForm.residente_unidad;
-      }
-
-      const saved = await apiFetch(
-        `/identidad/usuarios/${editingUserId ? `${editingUserId}/` : ''}?id_establecimiento=${establecimientoId}`,
-        {
-        method: editingUserId ? 'PATCH' : 'POST',
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const nextUser = {
-        id: saved.id_usuario,
-        nombre: saved.nombre,
-        rol: saved.rol?.nombre || listRoleNames[saved.id_rol] || userForm.rol,
-        rolId: saved.id_rol,
-        email: saved.correo,
-        estado: saved.estado ? 'Activo' : 'Inactivo',
-        activo: Boolean(saved.estado),
-        permisos_excepciones: saved.permisos_excepciones || userForm.permisos_excepciones || {},
-      };
-
-      if (editingUserId) {
-        setUsers((prev) => prev.map((user) => user.id === editingUserId ? nextUser : user));
-      } else {
-        setUsers((prev) => [nextUser, ...prev]);
-      }
-      setUserForm(defaultUserForm);
-      setEditingUserId(null);
-      setUserModalTab('account');
-      setShowUserForm(false);
-      setError('');
-    } catch (createError) {
-      setError(createError.message || 'No se pudo crear el usuario.');
-    }
-  };
-
-  const handleCreateRole = async (event) => {
-    event.preventDefault();
-    if (!roleForm.nombre) {
-      setError('Debes poner un nombre para el rol.');
-      return;
-    }
-
-    try {
-      const created = await apiFetch('/identidad/roles/', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          nombre: roleForm.nombre,
-          permisos_input: roleForm.permisos,
-        }),
-      });
-
-      const nextRole = {
-        nombre: created.nombre,
-        permisos: created.permisos || roleForm.permisos,
-      };
-
-      setRoles((prev) => [nextRole, ...prev]);
-      setRoleForm(defaultRoleForm);
-      setShowRoleForm(false);
-      setError('');
-    } catch (createError) {
-      setError(createError.message || 'No se pudo crear el rol.');
-    }
+    navigate('/', { replace: true });
   };
 
   const handleCreateVehicle = async (event) => {
@@ -951,7 +579,6 @@ function App() {
     try {
       const created = await apiFetch(`/operaciones/vehiculos/?id_establecimiento=${establecimientoId}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...vehicleForm,
           placa: vehicleForm.placa.trim().toUpperCase(),
@@ -986,7 +613,6 @@ function App() {
       const now = new Date().toISOString();
       const created = await apiFetch(`/operaciones/movimientos/?id_establecimiento=${establishmentId}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id_establecimiento: establishmentId,
           id_vehiculo: vehicle?.id_vehiculo || null,
@@ -1021,7 +647,6 @@ function App() {
     try {
       const created = await apiFetch(`/operaciones/incidencias/?id_establecimiento=${establishmentId}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id_establecimiento: establishmentId,
           id_vehiculo: incidentForm.id_vehiculo || null,
@@ -1059,7 +684,6 @@ function App() {
     try {
       const result = await apiFetch(`/operaciones/qr/${purpose === 'visitante' ? 'visitante/validar' : 'residente/validar'}/?id_establecimiento=${establishmentId}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...(isResidentShortCode ? { codigo: cleanCode } : { token: cleanCode }),
           tipo_movimiento: scanAction,
@@ -1094,19 +718,10 @@ function App() {
       const body = new FormData();
       body.append('imagen', imageBlob, 'captura-placa.jpg');
       body.append('id_dispositivo', 'CAMARA-WEB-LPR');
-      const response = await fetch(`${API_BASE_URL}/inteligencia/reconocimientos/procesar/?id_establecimiento=${establishmentId}`, {
+      const payload = await apiFetch(`/inteligencia/reconocimientos/procesar/?id_establecimiento=${establishmentId}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.accessToken}` },
         body,
       });
-      const responseText = await response.text();
-      let payload = {};
-      try {
-        payload = responseText ? JSON.parse(responseText) : {};
-      } catch {
-        payload = { detail: responseText };
-      }
-      if (!response.ok) throw new Error(apiErrorMessage(payload, 'No se pudo analizar la captura.'));
       if (!payload.detectado || !payload.resultados?.length) {
         setLprResult(null);
         setLprNotice(payload.mensaje || 'No se detectó una placa. Ajusta el encuadre e intenta otra vez.');
@@ -1141,7 +756,6 @@ function App() {
     try {
       const qr = await apiFetch('/operaciones/qr/residente/', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(residentQrVehicle ? { id_vehiculo: residentQrVehicle } : {}),
       });
       setResidentQr(qr);
@@ -1161,7 +775,6 @@ function App() {
       const end = visitorForm.vigente_hasta ? new Date(visitorForm.vigente_hasta) : new Date(now.getTime() + 60 * 60 * 1000);
       const created = await apiFetch(`/operaciones/invitaciones-visitantes/?id_establecimiento=${establishmentId}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nombre_visitante: visitorForm.nombre_visitante.trim(),
           documento_visitante: visitorForm.documento_visitante.trim() || null,
@@ -1185,22 +798,12 @@ function App() {
     try {
       const updated = await apiFetch(`/operaciones/invitaciones-visitantes/${id}/revocar/?id_establecimiento=${establishmentId}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.accessToken}` },
       });
       setVisitorInvitations((current) => current.map((item) => item.id_invitacion === id ? updated : item));
       setError('');
     } catch (revokeError) {
       setError(revokeError.message || 'No se pudo revocar la invitación.');
     }
-  };
-
-  const togglePermission = (perm) => {
-    setRoleForm((prev) => {
-      const current = new Set(prev.permisos);
-      if (current.has(perm)) current.delete(perm);
-      else current.add(perm);
-      return { ...prev, permisos: [...current] };
-    });
   };
 
   const reportConfig = {
@@ -1348,155 +951,21 @@ function App() {
     </div>
   );
 
-  const closeUserModal = () => {
-    setShowUserForm(false);
-    setEditingUserId(null);
-    setUserForm(defaultUserForm);
-    setUserModalTab('account');
-    setError('');
-  };
-
-  const openUserModal = (user = null, tab = 'account') => {
-    setEditingUserId(user?.id ?? null);
-    if (user) {
-      const matchingRole = Object.entries(roleIdMap).find(([, id]) => Number(id) === Number(user.rolId));
-      setUserForm({ ...defaultUserForm, nombre: user.nombre, email: user.email, rol: matchingRole?.[0] || 'vigilante', estado: user.activo ?? user.estado === 'Activo', permisos_excepciones: user.permisos_excepciones || {} });
-    } else setUserForm(defaultUserForm);
-    setUserModalTab(tab);
-    setShowUserForm(true);
-    setError('');
-  };
-
-  const setPermissionException = (key, value) => {
-    setUserForm((current) => {
-      const next = { ...(current.permisos_excepciones || {}) };
-      if (value === null) delete next[key];
-      else next[key] = value;
-      return { ...current, permisos_excepciones: next };
-    });
-  };
-
-  const filteredUsers = users.filter((user) => `${user.nombre} ${user.email} ${user.rol}`.toLocaleLowerCase().includes(userSearch.trim().toLocaleLowerCase()));
-  const modalRoleOptions = editingUserId && !assignableRoleOptions.some((option) => option.value === userForm.rol)
-    ? [{ value: userForm.rol, label: listRoleNames[roleIdMap[userForm.rol]] || userForm.rol }, ...assignableRoleOptions]
-    : assignableRoleOptions;
-
   const renderUsers = () => (
-    <div className="panel-card user-management-card">
-      <div className="user-management-heading">
-        <div><span className="eyebrow">Administración de acceso</span><h3>Usuarios y roles</h3><p>Administra cuentas, asigna roles y define excepciones de acceso.</p></div>
-        <button className="primary-btn" type="button" disabled={!canEdit} onClick={() => openUserModal()}><span aria-hidden="true">＋</span> Nuevo usuario</button>
-      </div>
-      <div className="user-table-toolbar">
-        <label className="user-search-field"><span className="sr-only">Buscar usuarios</span><span aria-hidden="true">⌕</span><input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Buscar por nombre, correo o rol…" /></label>
-        <span className="user-result-count">{filteredUsers.length} de {users.length} usuarios</span>
-      </div>
-      <div className="table-scroll user-table-scroll"><table className="data-table user-data-table">
-        <thead><tr><th>Usuario</th><th>Rol asignado</th><th>Estado</th><th><span className="sr-only">Acciones</span></th></tr></thead>
-        <tbody>{filteredUsers.map((user) => {
-          const initials = user.nombre.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-          const exceptionCount = Object.keys(user.permisos_excepciones || {}).length;
-          return <tr key={user.id}>
-            <td><div className="user-identity"><span className="user-avatar">{initials || 'U'}</span><span><strong>{user.nombre}</strong><small>{user.email}</small></span></div></td>
-            <td><span className="user-role-pill">{user.rol}</span></td>
-            <td><span className={`user-status ${user.estado === 'Activo' ? 'is-active' : 'is-inactive'}`}><i />{user.estado}</span></td>
-            <td><div className="user-row-actions"><button type="button" className="user-action-btn" disabled={!canEdit} onClick={() => openUserModal(user)}>Editar usuario</button>{isPlatformSuperAdmin ? <button type="button" className="user-action-btn permission-action" onClick={() => openUserModal(user, 'permissions')}>Permisos{exceptionCount ? <span>{exceptionCount}</span> : null}</button> : null}</div></td>
-          </tr>;
-        })}{!filteredUsers.length ? <tr><td colSpan="4" className="user-empty-state">{users.length ? 'No hay usuarios que coincidan con la búsqueda.' : 'Todavía no hay usuarios registrados.'}</td></tr> : null}</tbody>
-      </table></div>
-
-      {showUserForm ? <div className="user-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeUserModal(); }}>
-        <section className="user-modal" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
-          <div className="user-modal-prism" />
-          <header className="user-modal-header"><div><span className="eyebrow">HEIMDALL TECH · ACCESOS</span><h2 id="user-modal-title">{editingUserId ? 'Editar usuario' : 'Crear usuario'}</h2><p>{editingUserId ? `Actualiza el acceso de ${userForm.nombre}.` : 'Crea una cuenta y asigna su rol inicial.'}</p></div><button type="button" className="user-modal-close" aria-label="Cerrar ventana" onClick={closeUserModal}>×</button></header>
-          {editingUserId && isPlatformSuperAdmin ? <div className="user-modal-tabs" role="tablist" aria-label="Secciones de usuario"><button type="button" role="tab" aria-selected={userModalTab === 'account'} className={userModalTab === 'account' ? 'active' : ''} onClick={() => setUserModalTab('account')}>Datos y rol</button><button type="button" role="tab" aria-selected={userModalTab === 'permissions'} className={userModalTab === 'permissions' ? 'active' : ''} onClick={() => setUserModalTab('permissions')}>Permisos extra</button></div> : null}
-          <form className="user-modal-form" onSubmit={handleCreateUser}>
-            {userModalTab === 'account' ? <div className="user-modal-content">
-              <div className="user-modal-section-title"><span>01</span><div><strong>Datos de la cuenta</strong><small>Información básica y estado de acceso</small></div></div>
-              <div className="user-modal-fields">
-                <label><span>Nombre completo</span><input autoFocus value={userForm.nombre} onChange={(event) => setUserForm((p) => ({ ...p, nombre: event.target.value }))} required /></label>
-                <label><span>Correo electrónico</span><input type="email" value={userForm.email} onChange={(event) => setUserForm((p) => ({ ...p, email: event.target.value }))} required /></label>
-                <label><span>Rol base</span><select value={userForm.rol} onChange={(event) => setUserForm((p) => ({ ...p, rol: event.target.value }))}>{modalRoleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-                {editingUserId ? <label><span>Estado de la cuenta</span><select value={userForm.estado ? 'true' : 'false'} onChange={(event) => setUserForm((p) => ({ ...p, estado: event.target.value === 'true' }))}><option value="true">Activo</option><option value="false">Inactivo</option></select></label> : <label><span>Contraseña inicial</span><input type="password" minLength="8" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((p) => ({ ...p, password: event.target.value }))} required /></label>}
-                {editingUserId ? <label className="user-modal-field-wide"><span>Nueva contraseña <small>· opcional</small></span><input type="password" minLength="8" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((p) => ({ ...p, password: event.target.value }))} placeholder="Déjala vacía para conservar la actual" /></label> : null}
-                {!editingUserId && isPlatformSuperAdmin ? <label className="user-modal-field-wide"><span>Establecimiento asignado</span><select value={userForm.id_establecimiento || String(session.user?.id_establecimiento || '')} onChange={(event) => setUserForm((p) => ({ ...p, id_establecimiento: event.target.value }))} required><option value="" disabled>Selecciona un establecimiento</option>{catalogData.establecimientos.map((item) => <option key={item.id_establecimiento} value={item.id_establecimiento}>{item.nombre} · {item.plan?.nombre || 'Sin plan'}</option>)}</select></label> : null}
-                {!editingUserId && userForm.rol === 'residente' ? <><label><span>Documento del residente</span><input value={userForm.residente_documento} onChange={(event) => setUserForm((p) => ({ ...p, residente_documento: event.target.value }))} required /></label><label><span>Teléfono</span><input value={userForm.residente_telefono} onChange={(event) => setUserForm((p) => ({ ...p, residente_telefono: event.target.value }))} /></label><label className="user-modal-field-wide"><span>Casa o unidad</span><input value={userForm.residente_unidad} onChange={(event) => setUserForm((p) => ({ ...p, residente_unidad: event.target.value }))} placeholder="Ej. Casa 14, Torre B" /></label></> : null}
-              </div>
-            </div> : <div className="user-modal-content permissions-content">
-              <div className="user-modal-section-title"><span>02</span><div><strong>Excepciones individuales</strong><small>Estos ajustes sobreescriben los permisos del rol asignado.</small></div></div>
-              <div className="permission-reset-bar"><span>Quita las excepciones y vuelve a aplicar los permisos originales del rol.</span><button type="button" className="permission-reset-all" disabled={!Object.keys(userForm.permisos_excepciones || {}).length} onClick={() => setUserForm((current) => ({ ...current, permisos_excepciones: {} }))}>Restablecer permisos del rol</button></div>
-              <div className="permission-override-list">{permissionExceptionOptions.map((item) => {
-                const overrides = userForm.permisos_excepciones || {};
-                const inherited = !Object.prototype.hasOwnProperty.call(overrides, item.key);
-                const enabled = inherited ? (permissionsByRole[userForm.rol] || []).includes(item.key) : Boolean(overrides[item.key]);
-                return <div className="permission-override-row" key={item.key}><div><strong>{item.label}</strong><small>{item.hint}</small></div><div className="permission-override-control"><span className={inherited ? 'inherit-label' : enabled ? 'allow-label' : 'deny-label'}>{inherited ? 'Por rol' : enabled ? 'Permitido' : 'Denegado'}</span><button type="button" role="switch" aria-checked={enabled} aria-label={`${item.label}: ${inherited ? 'heredado del rol' : enabled ? 'permitido' : 'denegado'}`} className={`permission-switch ${enabled ? 'is-on' : ''} ${inherited ? 'is-inherited' : ''}`} onClick={() => setPermissionException(item.key, !enabled)}><span /></button>{!inherited ? <button type="button" className="inherit-reset" onClick={() => setPermissionException(item.key, null)} aria-label={`Restablecer ${item.label} al permiso del rol`}>Restablecer</button> : null}</div></div>;
-              })}</div>
-              <div className="permission-policy-card"><div className="policy-icon" aria-hidden="true">◇</div><div className="policy-heading"><strong>Política de edición</strong><small>El modo de solo lectura prevalece sobre el permiso de edición.</small></div>{[{ key: 'puede_editar', label: userPermissionLabels.puede_editar, fallback: true }, { key: 'solo_lectura', label: userPermissionLabels.solo_lectura, fallback: false }].map((item) => {
-                const overrides = userForm.permisos_excepciones || {};
-                const inherited = !Object.prototype.hasOwnProperty.call(overrides, item.key);
-                const enabled = inherited ? item.fallback : Boolean(overrides[item.key]);
-                return <div className="permission-policy-toggle" key={item.key}><span>{item.label}<small>{inherited ? 'Heredado' : 'Excepción activa'}</small></span><button type="button" role="switch" aria-checked={enabled} aria-label={`${item.label}: ${enabled ? 'activado' : 'desactivado'}`} className={`permission-switch ${enabled ? 'is-on' : ''} ${inherited ? 'is-inherited' : ''}`} onClick={() => setPermissionException(item.key, !enabled)}><span /></button></div>;
-              })}</div>
-            </div>}
-            {error ? <div className="user-modal-error" role="alert">{error}</div> : null}
-            <footer className="user-modal-footer"><button type="button" className="ghost-btn" onClick={closeUserModal}>Cancelar</button><button type="submit" className="primary-btn" disabled={!canEdit}>{editingUserId ? 'Guardar cambios' : 'Crear usuario'}</button></footer>
-          </form>
-        </section>
-      </div> : null}
-    </div>
+    <UserManagement
+      profile={session.user}
+      isSuperAdmin={isPlatformSuperAdmin}
+      catalogo={session.user?.catalogo_permisos || []}
+      onSelfChanged={refreshProfile}
+    />
   );
 
   const renderRoles = () => (
-    <div className="panel-card">
-      <div className="section-header">
-        <h3>Roles y permisos</h3>
-        {isPlatformSuperAdmin ? <button className="primary-btn" onClick={() => setShowRoleForm((v) => !v)}>
-          {showRoleForm ? 'Cerrar' : '+ Crear rol'}
-        </button> : null}
-      </div>
-
-      {showRoleForm && isPlatformSuperAdmin && (
-        <form className="form-panel" onSubmit={handleCreateRole}>
-          <div className="field-grid">
-            <label>
-              <span>Nombre del rol</span>
-              <input value={roleForm.nombre} onChange={(e) => setRoleForm((p) => ({ ...p, nombre: e.target.value }))} />
-            </label>
-          </div>
-
-          <div className="permission-grid">
-            {Object.entries(permissionCatalog).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                className={`permission-chip ${roleForm.permisos.includes(key) ? 'active' : ''}`}
-                onClick={() => togglePermission(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="form-actions">
-            <button type="submit" className="primary-btn">Guardar rol</button>
-            <button type="button" className="ghost-btn" onClick={() => setShowRoleForm(false)}>Cancelar</button>
-          </div>
-        </form>
-      )}
-
-      <div className="role-list">
-        {roles.map((roleItem) => (
-          <div key={`${roleItem.nombre}-${roleItem.permisos.join('-')}`} className="role-box">
-            <div className="role-title">{roleItem.nombre}</div>
-            <div className="pill-wrap">
-              {roleItem.permisos.map((perm) => (
-                <span key={`${roleItem.nombre}-${perm}`} className="perm-pill">{permissionCatalog[perm] || perm}</span>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <RoleManagement
+      catalogo={session.user?.catalogo_permisos || []}
+      isSuperAdmin={isPlatformSuperAdmin}
+      onRolesChanged={refreshProfile}
+    />
   );
 
   const renderCatalogos = () => {
@@ -1844,17 +1313,30 @@ function App() {
     seguridad: canAccess('seguridad') ? renderSeguridad() : <div className="panel-card warn">No tienes permisos para seguridad.</div>,
   };
 
-  if (!session.loggedIn) {
+  if (!session.user) {
+    if (isLandingRoute) {
+      return <LandingPage onNavigate={navigate} />;
+    }
     return (
       <div className="login-page">
         <div className="login-card">
+          <a
+            className="login-back"
+            href="/"
+            onClick={(event) => {
+              event.preventDefault();
+              navigate('/');
+            }}
+          >
+            ← Volver al inicio
+          </a>
           <div className="login-brand">HEIMDALL</div>
           <h2>Acceso al sistema</h2>
           <form onSubmit={handleLogin} className="login-form">
-            <input name="username" type="text" placeholder="Usuario o correo (ej. vigilante@pinos.com)" />
-            <input name="password" type="password" placeholder="Contraseña" />
+            <input name="username" type="text" placeholder="Usuario o correo" autoComplete="username" />
+            <input name="password" type="password" placeholder="Contraseña" autoComplete="current-password" />
             <p className="login-hint">
-              Super Admin: admin / miacarola · Vigilante: vigilante@pinos.com / hash_pass_123 · Residente: residente@pinos.com / hash_pass_123
+              Acceso con las credenciales asignadas por tu administrador. La sesión se protege mediante cookie HttpOnly y token en memoria.
             </p>
             <button type="submit" className="primary-btn login-btn" disabled={loading}>
               {loading ? 'Ingresando...' : 'Ingresar'}
@@ -1866,31 +1348,19 @@ function App() {
     );
   }
 
+  if (session.user && (isLandingRoute || isLoginRoute)) {
+    return <div className="route-redirect" role="status">Entrando a Heimdall…</div>;
+  }
+
   return (
     <div className="app-shell">
-      {mobileMenuOpen ? <button type="button" className="mobile-nav-backdrop" aria-label="Cerrar menú de navegación" onClick={() => setMobileMenuOpen(false)} /> : null}
-      <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-        <div className="sidebar-mobile-header"><span>MENÚ PRINCIPAL</span><button type="button" aria-label="Cerrar menú" onClick={() => setMobileMenuOpen(false)}>×</button></div>
-        <div className="brand" title="Heimdall · Guardián de Bifröst"><HeimdallMark /></div>
-        <nav className="side-menu" id="primary-navigation" aria-label="Navegación principal">
-          {menuBase.filter((item) => canAccess(item.key) || item.key === 'dashboard').map((item) => {
-            const lockedByPlan = item.key === 'camaras' && !hasFeature('lpr');
-            return (
-            <button
-              key={item.key}
-              className={`nav-btn ${activeTab === item.key ? 'active' : ''} ${lockedByPlan ? 'locked' : ''}`}
-              aria-current={activeTab === item.key ? 'page' : undefined}
-              onClick={() => { setActiveTab(item.key); setMobileMenuOpen(false); }}
-              title={lockedByPlan ? `LPR/IA no está incluido en el plan ${session.user?.plan?.nombre || 'actual'}` : item.label}
-            >
-              <span className="nav-icon-wrap">{lockedByPlan ? <NavigationIcon name="seguridad" /> : <NavigationIcon name={item.key} />}</span>
-              <small>{lockedByPlan ? `${item.label} · Plan` : item.label}</small>
-            </button>
-            );
-          })}
-        </nav>
-        <div className="sidebar-guard"><span><HeimdallMark /></span><strong>Himinbjörg Guard</strong><small>SISTEMA ACTIVO</small></div>
-      </aside>
+      <Sidebar
+        profile={session.user}
+        activeTab={activeTab}
+        onNavigate={setActiveTab}
+        mobileOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
 
       <main className="workspace">
         <header className="topbar">
@@ -1903,22 +1373,9 @@ function App() {
           </div>
 
           <div className="topbar-right">
-            {isPlatformSuperAdmin ? (
-              <select
-                value={debugViewRole || actualRole}
-                onChange={(e) => setDebugViewRole(e.target.value === actualRole ? '' : e.target.value)}
-                title="Vista de prueba (solo Super Admin)"
-                aria-label="Vista de prueba por rol"
-              >
-                <option value="superadmin">Vista: Super Admin</option>
-                <option value="admin">Vista: Administrador</option>
-                <option value="supervisor">Vista: Supervisor</option>
-                <option value="vigilante">Vista: Vigilante</option>
-              </select>
-            ) : null}
             <div className="user-box">
               <span>{session.user?.nombre || session.user?.username || 'Usuario'}</span>
-              <small className="role-tag">{session.user?.rol || actualRole}</small>
+              <small className="role-tag">{session.user?.rol || 'Sin rol'}</small>
               <button className="ghost-btn" onClick={handleLogout}>Salir</button>
             </div>
           </div>

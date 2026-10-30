@@ -21,6 +21,14 @@ npm run dev -- --host 127.0.0.1 --port 5173
 
 Abre <http://localhost:5173/>. El método recomendado para instalar y levantar todo el sistema en Windows está en el [README principal](../README.md).
 
+## Rutas
+
+- `/` — landing comercial con botones para iniciar sesión y abrir el repositorio.
+- `/login` — inicio de sesión.
+- `/panel` — panel autenticado. Si no hay sesión, redirige a `/login`.
+
+La navegación usa la History API. En producción, el servidor web debe devolver `index.html` para `/login` y `/panel` (fallback de SPA). No uses `/app`: ese nombre coincide con el archivo legado `app.js` de la raíz y Vite lo sirve como recurso estático.
+
 ## Comandos de desarrollo
 
 ```powershell

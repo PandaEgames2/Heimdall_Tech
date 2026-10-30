@@ -14,11 +14,13 @@ Esta guía resume el primer arranque en una PC Windows. La primera instalación 
 ## 1. Obtener el código
 
 ```powershell
-git clone <URL_DEL_REPOSITORIO>
+git clone https://github.com/PandaEgames2/Heimdall_Tech.git
 cd Heimdall_Tech
 ```
 
 Si ya tienes la carpeta, abre PowerShell en ella. Comprueba versiones con `py -3.12 --version`, `node --version` y `npm --version`.
+
+En VS Code, abre la carpeta raíz del proyecto y usa **Terminal → Nueva terminal** para trabajar desde PowerShell sin salir del editor.
 
 ## 2. Preparar Python y las dependencias del backend
 
@@ -62,21 +64,36 @@ cd ..
 Con MySQL activo y `backend\.env` configurado, ejecuta desde la raíz:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\iniciar.ps1
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\iniciar.ps1
 ```
+
+Si el archivo sigue bloqueado, usa `powershell -ExecutionPolicy Bypass -File .\iniciar.ps1`.
 
 El script comprueba MySQL, aplica migraciones internas de Django, asegura las cuentas demo y el esquema operativo, ejecuta `manage.py check` e inicia los dos servidores. No importa el SQL destructivo.
 
-Abre <http://localhost:5173/>. API: <http://localhost:8000/api/>. Estado: <http://localhost:8000/api/health/>.
+Abre la landing en <http://localhost:5173/>, inicia sesión en <http://localhost:5173/login> y entra al panel en <http://localhost:5173/panel>. API: <http://localhost:8000/api/>. Estado: <http://localhost:8000/api/health/>.
 
 ## Cuentas de demostración
 
-| Rol | Usuario | Contraseña |
-|---|---|---|
-| Super Admin | `admin` | `miacarola` |
-| Super Admin alternativo | `rastor36` | `miacarola` |
-| Vigilante | `vigilante@pinos.com` | `hash_pass_123` |
-| Residente | `residente@pinos.com` | `hash_pass_123` |
+Todas las cuentas demo comparten la contraseña `Heimdall#2026`.
+
+| Rol | Usuario |
+|---|---|
+| Super Admin | `admin` o `admin@heimdall.tech` |
+| Super Admin alternativo | `rastor36` o `rastor36@heimdall.tech` |
+| Administrador de Los Pinos | `admin@pinos.com` |
+| Vigilantes de Los Pinos | `vigilante@pinos.com`, `vigilante2@pinos.com` |
+| Residente de Los Pinos | `residente@pinos.com` |
+| Administrador de Norte | `admin@norte.com` |
+| Vigilante de Norte | `vigilante@norte.com` |
+| Administrador de Uniguajira | `admin@uniguajira.edu.co` |
+| Vigilante de Uniguajira | `porteria@uniguajira.edu.co` |
+| Supervisor de Uniguajira | `supervision@uniguajira.edu.co` |
+| Administrador Logístico | `admin@logistico.com` |
+| Vigilante Logístico | `porteria@logistico.com` |
+
+Las contraseñas solo se muestran con `$env:HEIMDALL_SHOW_DEMO_CREDENTIALS=1` antes de iniciar. Cambia la contraseña demo con `HEIMDALL_DEMO_PASSWORD` si lo necesitas. Si una base antigua falla al iniciar sesión, ejecuta `python manage.py ensure_demo_accounts --reset-passwords` para reparar los hashes y migrarlos a scrypt.
 
 ## Si algo falla
 

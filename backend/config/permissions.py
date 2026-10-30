@@ -1,13 +1,16 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 from app_empresas.features import features_for_establecimiento
+from .rbac import resolve_effective_permissions
 from .tenant_utils import (
-    ADMIN_ROL_IDS,
     RESIDENTE_ROL_ID,
-    STAFF_ROL_IDS,
     get_usuario_perfil,
     is_platform_superadmin,
 )
+
+# Módulos administrativos: crear exige `puede_editar`. En módulos operativos
+# (accesos, mi_qr) el personal puede crear registros sin ser administrador.
+ADMIN_MODULES = {"usuarios", "roles", "catalogos", "seguridad", "config"}
 
 
 def _module_for_view(view, profile=None, request=None):
@@ -39,20 +42,29 @@ def _module_for_view(view, profile=None, request=None):
     return None
 
 
-def _explicit_module_access(request, profile, module):
-    """Return an explicit per-user module decision, or None to use role defaults."""
-    if not profile:
-        return None
-    overrides = profile.permisos_excepciones or {}
-    if not isinstance(overrides, dict):
-        return None
-    if request.method not in SAFE_METHODS and (
-        overrides.get("solo_lectura") is True or overrides.get("puede_editar") is False
-    ):
+def _access_for(request):
+    perfil = get_usuario_perfil(request.user)
+    access = resolve_effective_permissions(
+        perfil,
+        is_superadmin=is_platform_superadmin(request.user),
+    )
+    return perfil, access
+
+
+def _allows_write(request, access, module):
+    """Aplica solo_lectura, puede_editar y puede_eliminar de forma coherente."""
+
+    if request.method in SAFE_METHODS:
+        return True
+    if access.get("solo_lectura"):
         return False
-    if module in overrides:
-        return bool(overrides[module])
-    return None
+    if request.method == "DELETE":
+        return bool(access.get("puede_eliminar"))
+    if request.method in ("PUT", "PATCH"):
+        return bool(access.get("puede_editar"))
+    if module in ADMIN_MODULES:
+        return bool(access.get("puede_editar"))
+    return True
 
 
 class IsPlatformSuperAdmin(BasePermission):
@@ -63,7 +75,7 @@ class IsPlatformSuperAdmin(BasePermission):
 
 
 class IsPlatformSuperAdminOrRoleReader(BasePermission):
-    """Keep global role writes Super Admin only; allow explicitly granted read access."""
+    """Escrituras globales Super Admin; lectura para quien tenga el módulo roles."""
 
     message = "Solo un Super Admin puede modificar roles globales."
 
@@ -74,23 +86,25 @@ class IsPlatformSuperAdminOrRoleReader(BasePermission):
             return True
         if request.method not in SAFE_METHODS:
             return False
-        perfil = get_usuario_perfil(request.user)
-        return _explicit_module_access(request, perfil, "roles") is True
+        _, access = _access_for(request)
+        return "roles" in access["permisos"]
 
 
 class IsTenantAdmin(BasePermission):
-    message = "Necesitas el rol de administrador para gestionar usuarios."
+    message = "Necesitas permiso de administración para esta operación."
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
         if is_platform_superadmin(request.user):
             return True
-        perfil = get_usuario_perfil(request.user)
-        decision = _explicit_module_access(request, perfil, "usuarios")
-        if decision is not None:
-            return decision
-        return bool(perfil and perfil.id_rol_id in ADMIN_ROL_IDS)
+        perfil, access = _access_for(request)
+        if perfil is None:
+            return False
+        module = _module_for_view(view, perfil, request)
+        if module is not None and module not in access["permisos"]:
+            return False
+        return _allows_write(request, access, module)
 
 
 class IsAuthenticatedWithTenant(BasePermission):
@@ -115,20 +129,22 @@ class IsAuthenticatedWithTenant(BasePermission):
 
 
 class IsTenantStaff(BasePermission):
-    """Allows establishment staff roles and the platform super admin."""
+    """Permite operar a quien tenga el módulo efectivo y respeta solo_lectura."""
 
-    message = "Esta operación requiere una cuenta de administración o vigilancia."
+    message = "Esta operación requiere un permiso operativo o administrativo."
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
         if is_platform_superadmin(request.user):
             return True
-        perfil = get_usuario_perfil(request.user)
-        decision = _explicit_module_access(request, perfil, _module_for_view(view, perfil, request))
-        if decision is not None:
-            return decision
-        return bool(perfil and perfil.id_rol_id in STAFF_ROL_IDS)
+        perfil, access = _access_for(request)
+        if perfil is None:
+            return False
+        module = _module_for_view(view, perfil, request)
+        if module is not None and module not in access["permisos"]:
+            return False
+        return _allows_write(request, access, module)
 
 
 class IsResident(BasePermission):
@@ -137,11 +153,13 @@ class IsResident(BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        perfil = get_usuario_perfil(request.user)
+        perfil, access = _access_for(request)
         if not perfil or perfil.id_rol_id != RESIDENTE_ROL_ID:
             return False
-        decision = _explicit_module_access(request, perfil, _module_for_view(view, perfil, request))
-        return decision is not False
+        module = _module_for_view(view, perfil, request)
+        if module is not None and module not in access["permisos"]:
+            return False
+        return _allows_write(request, access, module)
 
 
 class IsTenantStaffOrResident(BasePermission):
@@ -152,11 +170,13 @@ class IsTenantStaffOrResident(BasePermission):
             return False
         if is_platform_superadmin(request.user):
             return True
-        perfil = get_usuario_perfil(request.user)
-        decision = _explicit_module_access(request, perfil, _module_for_view(view, perfil, request))
-        if decision is not None:
-            return decision
-        return bool(perfil and perfil.id_rol_id in STAFF_ROL_IDS | {RESIDENTE_ROL_ID})
+        perfil, access = _access_for(request)
+        if perfil is None:
+            return False
+        module = _module_for_view(view, perfil, request)
+        if module is not None and module not in access["permisos"]:
+            return False
+        return _allows_write(request, access, module)
 
 
 class HasLprFeature(BasePermission):

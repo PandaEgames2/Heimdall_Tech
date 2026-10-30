@@ -33,7 +33,7 @@ No hay app nativa en Play Store todavía. La **versión móvil** es la misma web
 4. Inicia sesión como **vigilante** para pruebas de portería:
 
    - Usuario: `vigilante@pinos.com`
-   - Contraseña: `hash_pass_123`
+   - Contraseña: `Heimdall#2026`
 
 5. **Añadir a pantalla de inicio** (opcional):
    - **Android (Chrome):** menú ⋮ → “Instalar aplicación” o “Añadir a pantalla principal”.
@@ -43,18 +43,18 @@ No hay app nativa en Play Store todavía. La **versión móvil** es la misma web
 
 ## Qué puede hacer un vigilante
 
-- Ver **Dashboard** y **Cámaras** (según rol).
+- Ver **Dashboard**, **Cámaras** y **Control de acceso** según los permisos efectivos que devuelve el backend.
 - Usar la cámara del dispositivo para simular captura LPR.
 - Modo offline: la UI indica si no hay red; la cola de sincronización completa está prevista en el backend (`estado_sincronizacion`) y se ampliará en versiones futuras.
 
+La barra lateral se construye con el menú que entrega `/api/profile/`. Si un permiso no está incluido en el rol ni en las excepciones del usuario, el módulo no aparece y la API también rechaza la operación.
+
 ## Super Admin en móvil
 
-Solo para pruebas del profesor:
-
 - Usuario: `admin` o `admin@heimdall.tech`
-- Contraseña: `miacarola`
+- Contraseña: `Heimdall#2026`
 
-El selector **“Vista de prueba (rol)”** solo aparece para Super Admin en el panel web, no para vigilantes.
+El Super Admin administra los roles globales y las excepciones de permisos desde **Roles y permisos** y **Usuarios**. Los demás roles no ven esas opciones. Las contraseñas demo solo se imprimen si ejecutas `iniciar.ps1` con `$env:HEIMDALL_SHOW_DEMO_CREDENTIALS=1`.
 
 ## Problemas frecuentes
 

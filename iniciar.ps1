@@ -82,8 +82,16 @@ Write-Host "Preparando tablas internas de Django..."
 & $Python (Join-Path $Backend "manage.py") migrate --noinput
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
+Write-Host "Sincronizando esquema y roles RBAC..."
+& $Python (Join-Path $Backend "manage.py") ensure_rbac_schema
+if ($LASTEXITCODE -ne 0) { exit 1 }
+
 Write-Host "Sincronizando cuentas demo..."
-& $Python (Join-Path $Backend "manage.py") ensure_demo_accounts
+if ($env:HEIMDALL_SHOW_DEMO_CREDENTIALS -eq "1") {
+    & $Python (Join-Path $Backend "manage.py") ensure_demo_accounts --show-credentials
+} else {
+    & $Python (Join-Path $Backend "manage.py") ensure_demo_accounts
+}
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
 & $Python (Join-Path $Backend "manage.py") ensure_operational_schema
@@ -161,7 +169,7 @@ function Find-HeimdallFrontendPort {
             $page = Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -TimeoutSec 1 -UseBasicParsing
             if (-not $page.Content.Contains('id="root"')) { continue }
             $source = Invoke-WebRequest -Uri "http://127.0.0.1:$port/src/App.jsx" -TimeoutSec 2 -UseBasicParsing
-            if ($source.Content.Contains("mobile-menu-toggle") -and $source.Content.Contains("permission-reset-all")) {
+            if ($source.Content.Contains("UserManagement") -and $source.Content.Contains("Sidebar")) {
                 return $port
             }
         } catch { }
@@ -193,7 +201,5 @@ Write-Host ""
 Write-Host "Listo:" -ForegroundColor Green
 Write-Host "  API:      http://127.0.0.1:8000/api/"
 Write-Host "  Frontend: http://localhost:$FrontendPort/"
-Write-Host "  Super Admin: usuario admin  | contraseña miacarola"
-Write-Host "  Vigilante:   vigilante@pinos.com | contraseña hash_pass_123"
-Write-Host "  Residente:   residente@pinos.com | contraseña hash_pass_123"
+Write-Host "  Credenciales: define HEIMDALL_SHOW_DEMO_CREDENTIALS=1 antes de iniciar si necesitas verlas."
 Write-Host "  Móvil (misma Wi-Fi): http://<IP-de-tu-PC>:$FrontendPort/ — ver USO_MOVIL.md"

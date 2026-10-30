@@ -58,7 +58,8 @@ CREATE TABLE ESTABLECIMIENTO (
 CREATE TABLE ROL (
     id_rol INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(50) NOT NULL UNIQUE,
-    descripcion VARCHAR(150)
+    descripcion VARCHAR(150),
+    permisos JSON NULL
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------
@@ -243,26 +244,26 @@ INSERT INTO ESTABLECIMIENTO (id_establecimiento, id_plan, nombre, direccion, tel
 (3, 3, 'Universidad de La Guajira', 'Km 5 Vía Maicao', '3203000003', TRUE),
 (4, 1, 'Centro Logístico Manaure', 'Zona Industrial, Manaure', '3154000004', TRUE);
 
-INSERT INTO ROL (id_rol, nombre, descripcion) VALUES
-(1, 'Administrador', 'Control total del establecimiento'),
-(2, 'Vigilante', 'Operador de garita o portería'),
-(3, 'Supervisor', 'Auditoría y reportes'),
-(4, 'Super Admin', '["dashboard","usuarios","roles","catalogos","reportes","camaras","seguridad","config"]'),
-(5, 'Residente', 'Consulta su QR y administra invitaciones de visitantes');
+INSERT INTO ROL (id_rol, nombre, descripcion, permisos) VALUES
+(1, 'Administrador', 'Control total del establecimiento', '["dashboard","usuarios","catalogos","reportes","camaras","accesos","puede_editar","puede_eliminar"]'),
+(2, 'Vigilante', 'Operador de garita o portería', '["dashboard","camaras","accesos"]'),
+(3, 'Supervisor', 'Auditoría y reportes', '["dashboard","reportes","camaras","accesos"]'),
+(4, 'Super Admin', 'Administración global de la plataforma y del RBAC', '["dashboard","accesos","camaras","mi_qr","usuarios","roles","catalogos","reportes","seguridad","puede_editar","puede_eliminar"]'),
+(5, 'Residente', 'Consulta su QR y administra invitaciones de visitantes', '["mi_qr"]');
 
 INSERT INTO USUARIO (id_usuario, id_establecimiento, id_rol, nombre, correo, password_hash) VALUES
-(1, 1, 1, 'Carlos Admin Pinos', 'admin@pinos.com', 'pbkdf2_sha256$dev$hash_pass_123'),
-(2, 1, 2, 'Jose Vigilante Pinos', 'vigilante@pinos.com', 'pbkdf2_sha256$dev$hash_pass_123'),
-(3, 1, 2, 'Luis Vigilante Pinos', 'vigilante2@pinos.com', 'pbkdf2_sha256$dev$hash_pass_123'),
-(4, 2, 1, 'Ana Admin Norte', 'admin@norte.com', 'pbkdf2_sha256$dev$hash_pass_123'),
-(5, 2, 2, 'Pedro Vigilante Norte', 'vigilante@norte.com', 'pbkdf2_sha256$dev$hash_pass_123'),
-(6, 3, 1, 'Rector Admin Uniguajira', 'admin@uniguajira.edu.co', 'pbkdf2_sha256$dev$hash_pass_123'),
-(7, 3, 2, 'Mario Vigilante Uniguajira', 'porteria@uniguajira.edu.co', 'pbkdf2_sha256$dev$hash_pass_123'),
-(8, 3, 3, 'Sofia Supervisora', 'supervision@uniguajira.edu.co', 'pbkdf2_sha256$dev$hash_pass_123'),
-(9, 4, 1, 'Juan Admin Logístico', 'admin@logistico.com', 'pbkdf2_sha256$dev$hash_pass_123'),
-(10, 4, 2, 'Diego Vigilante Logístico', 'porteria@logistico.com', 'pbkdf2_sha256$dev$hash_pass_123'),
-(11, 1, 4, 'admin', 'admin@heimdall.tech', 'pbkdf2_sha256$dev$miacarola'),
-(12, 1, 4, 'rastor36', 'rastor36@heimdall.tech', 'pbkdf2_sha256$dev$miacarola');
+(1, 1, 1, 'Carlos Admin Pinos', 'admin@pinos.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
+(2, 1, 2, 'Jose Vigilante Pinos', 'vigilante@pinos.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
+(3, 1, 2, 'Luis Vigilante Pinos', 'vigilante2@pinos.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
+(4, 2, 1, 'Ana Admin Norte', 'admin@norte.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
+(5, 2, 2, 'Pedro Vigilante Norte', 'vigilante@norte.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
+(6, 3, 1, 'Rector Admin Uniguajira', 'admin@uniguajira.edu.co', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
+(7, 3, 2, 'Mario Vigilante Uniguajira', 'porteria@uniguajira.edu.co', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
+(8, 3, 3, 'Sofia Supervisora', 'supervision@uniguajira.edu.co', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
+(9, 4, 1, 'Juan Admin Logístico', 'admin@logistico.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
+(10, 4, 2, 'Diego Vigilante Logístico', 'porteria@logistico.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
+(11, 1, 4, 'admin', 'admin@heimdall.tech', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
+(12, 1, 4, 'rastor36', 'rastor36@heimdall.tech', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ=');
 
 INSERT INTO RESPONSABLE (id_responsable, id_establecimiento, documento_identidad, nombre, telefono) VALUES
 (1, 1, '1001001', 'Maria Gomez', '3001112233'),

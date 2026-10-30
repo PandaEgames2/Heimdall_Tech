@@ -1,0 +1,34 @@
+# Entorno local
+.env
+backend/.env
+frontend/.env
+
+# Python
+.venv/
+backend/.venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+backend/.alpr_runtime/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Logs
+*.log
+logs/
+
+# Archivos temporales de trabajo
+_temp_doc/
+_temp_doc.zip
+_docx_extract.txt
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/

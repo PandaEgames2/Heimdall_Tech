@@ -7,6 +7,7 @@ class Rol(models.Model):
     id_rol = models.AutoField(primary_key=True, db_column="id_rol")
     nombre = models.CharField(max_length=50, unique=True)
     descripcion = models.CharField(max_length=150, blank=True, null=True)
+    permisos = models.JSONField(default=list, blank=True, null=True)
 
     class Meta:
         db_table = "ROL"

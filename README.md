@@ -14,6 +14,8 @@ Sistema web de control de acceso vehicular y gestión de establecimientos. El pr
 - Cada establecimiento consulta únicamente su plan contratado. Los módulos no incluidos muestran un aviso y la API también aplica el límite de plan.
 - Reconocimiento de placas FastALPR basado en DNN (YOLOv9 para localizar placas y OCR ONNX para leerlas), desde una captura de cámara. Cada lectura requiere confirmación del vigilante antes de registrar el acceso.
 - Interfaz de identidad Heimdall con iconos SVG propios, ojo vigilante y acentos inspirados en Bifröst.
+- Landing comercial en `/`, inicio de sesión en `/login` y panel autenticado en `/panel`, con navegación directa y recarga segura de la SPA.
+- Creación de roles personalizados desde **+ Nuevo Rol** (solo Super Admin), además de los cinco roles base protegidos.
 
 ## Requisitos
 
@@ -33,10 +35,8 @@ Instaladores oficiales: [Python para Windows](https://www.python.org/downloads/w
 
 ### 1. Clona el repositorio
 
-Sustituye `<URL_DEL_REPOSITORIO>` por la URL de GitHub del proyecto:
-
 ```powershell
-git clone <URL_DEL_REPOSITORIO>
+git clone https://github.com/PandaEgames2/Heimdall_Tech.git
 cd Heimdall_Tech
 ```
 
@@ -75,7 +75,7 @@ Copy-Item .\backend\.env.example .\backend\.env
 Edita `backend\.env` y configura al menos estos valores según tu MySQL:
 
 ```env
-DJANGO_SECRET_KEY=una-clave-local
+DJANGO_SECRET_KEY=pega-aquí-una-clave-larga-y-aleatoria
 DJANGO_DEBUG=True
 DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
 
@@ -86,7 +86,15 @@ DB_HOST=127.0.0.1
 DB_PORT=3306
 ```
 
-No subas el archivo `backend\.env` a GitHub; contiene credenciales locales.
+Genera la clave de Django con:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Si vas a publicar el sistema, usa `DJANGO_DEBUG=False`, una clave distinta y HTTPS. En ese modo la aplicación rechaza claves de ejemplo y activa cookies seguras, HSTS y redirección SSL. También puedes definir `DJANGO_CORS_ALLOWED_ORIGINS` y `DJANGO_CSRF_TRUSTED_ORIGINS` con la URL exacta del frontend, y ajustar `JWT_ACCESS_MINUTES`, `JWT_REFRESH_DAYS` o `REFRESH_TOKEN_COOKIE_NAME`. La contraseña de las cuentas demo se puede cambiar con `HEIMDALL_DEMO_PASSWORD` antes de ejecutar `ensure_demo_accounts`.
+
+No subas `backend\.env` ni `frontend\.env` a GitHub; contienen configuración local. Los archivos `*.env.example` sí deben permanecer en el repositorio.
 
 ### 5. Prepara la base de datos
 
@@ -125,11 +133,40 @@ powershell -ExecutionPolicy Bypass -File .\iniciar.ps1
 
 El script comprueba MySQL, aplica las migraciones internas de Django, prepara roles/cuentas demo y el esquema operativo, valida Django e inicia API y frontend. No importa el SQL ni reinicia tus datos. En una instalación nueva, importa primero `Heimdall_Tech.sql` con el paso 5.
 
+#### Arranque desde Visual Studio Code
+
+1. Abre en VS Code la carpeta raíz que contiene `iniciar.ps1`.
+2. Abre **Terminal → Nueva terminal** y confirma que la terminal activa sea **PowerShell**.
+3. Habilita la ejecución de scripts solo para esa sesión:
+
+   ```powershell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+   ```
+
+4. Ejecuta el script desde la raíz:
+
+   ```powershell
+   .\iniciar.ps1
+   ```
+
+5. Si PowerShell sigue bloqueando el archivo, usa la variante explícita:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\iniciar.ps1
+   ```
+
+6. La primera vez, el script crea `backend\.venv`, instala las dependencias, copia `backend\.env` y `frontend\.env` desde sus ejemplos y comprueba MySQL. Si la base es nueva, configura `backend\.env`, ejecuta el paso 5 y vuelve a lanzar `.\iniciar.ps1`.
+7. Cuando termine, abre la landing en <http://localhost:5173/>. La API debe responder en <http://localhost:8000/api/health/>.
+
+Para detener los servidores, cierra desde el Administrador de tareas los procesos de Python y Node que inició el script.
+
 La primera captura LPR puede tardar más porque FastALPR descarga sus modelos de IA. Se necesita conexión a Internet para esa descarga inicial; las siguientes capturas reutilizan los modelos locales.
 
 Abre:
 
-- Aplicación: <http://localhost:5173/>
+- Landing: <http://localhost:5173/>
+- Inicio de sesión: <http://localhost:5173/login>
+- Panel autenticado: <http://localhost:5173/panel>
 - API: <http://localhost:8000/api/>
 - Estado de API y base de datos: <http://localhost:8000/api/health/>
 
@@ -160,16 +197,29 @@ Para detener el arranque manual, usa `Ctrl+C` en cada terminal.
 
 ## Cuentas locales de demostración
 
-El comando `ensure_demo_accounts` agrega los roles necesarios y crea las cuentas demo si no existen. También registra al residente como responsable de la unidad Casa 14, Torre B. Las cuentas de prueba son:
+El comando `ensure_demo_accounts` agrega los roles necesarios y crea o repara las cuentas demo si no existen. También registra al residente como responsable de la unidad Casa 14, Torre B. Todas las cuentas de prueba comparten la contraseña `Heimdall#2026`:
 
-| Rol | Usuario | Contraseña |
-|---|---|---|
-| Super Admin | `admin` | `miacarola` |
-| Super Admin alternativo | `rastor36` | `miacarola` |
-| Vigilante de Los Pinos | `vigilante@pinos.com` | `hash_pass_123` |
-| Residente de Los Pinos | `residente@pinos.com` | `hash_pass_123` |
+| Ámbito | Rol | Usuario | Contraseña |
+|---|---|---|---|
+| Plataforma | Super Admin | `admin` o `admin@heimdall.tech` | `Heimdall#2026` |
+| Plataforma | Super Admin de respaldo | `rastor36` o `rastor36@heimdall.tech` | `Heimdall#2026` |
+| Los Pinos | Administrador | `admin@pinos.com` | `Heimdall#2026` |
+| Los Pinos | Vigilante | `vigilante@pinos.com` | `Heimdall#2026` |
+| Los Pinos | Vigilante | `vigilante2@pinos.com` | `Heimdall#2026` |
+| Los Pinos | Residente | `residente@pinos.com` | `Heimdall#2026` |
+| Norte | Administrador | `admin@norte.com` | `Heimdall#2026` |
+| Norte | Vigilante | `vigilante@norte.com` | `Heimdall#2026` |
+| Uniguajira | Administrador | `admin@uniguajira.edu.co` | `Heimdall#2026` |
+| Uniguajira | Vigilante | `porteria@uniguajira.edu.co` | `Heimdall#2026` |
+| Uniguajira | Supervisor | `supervision@uniguajira.edu.co` | `Heimdall#2026` |
+| Logístico | Administrador | `admin@logistico.com` | `Heimdall#2026` |
+| Logístico | Vigilante | `porteria@logistico.com` | `Heimdall#2026` |
 
-Son credenciales de desarrollo. Cámbialas antes de usar el sistema fuera de un entorno local.
+Son credenciales de desarrollo. Cámbialas antes de usar el sistema fuera de un entorno local. Por seguridad, el script de inicio no imprime las contraseñas: para verlas explícitamente en una sesión local ejecuta `$env:HEIMDALL_SHOW_DEMO_CREDENTIALS=1` antes de `iniciar.ps1`, o usa `python manage.py ensure_demo_accounts --show-credentials`. Puedes definir otra contraseña demo con `HEIMDALL_DEMO_PASSWORD`.
+
+Si una base existente conserva hashes del antiguo backdoor de desarrollo o hashes PBKDF2, ejecuta `python manage.py ensure_demo_accounts --reset-passwords`. El comando repara únicamente los hashes inválidos por defecto; con `--reset-passwords` migra las cuentas seed al hasher preferido. La autenticación usa **scrypt** como hasher primario (memory-hard y más rápido que PBKDF2 en este equipo); PBKDF2 se conserva para validar hashes antiguos y el primer login exitoso los rehashea a scrypt.
+
+La autenticación usa un access token en memoria y un refresh token en cookie `HttpOnly` con rotación y lista negra. El frontend no guarda tokens en `localStorage`; al recargar, renueva la sesión con la cookie y vuelve a consultar `/api/profile/`.
 
 ## Prueba rápida de los flujos
 
@@ -183,13 +233,28 @@ Son credenciales de desarrollo. Cámbialas antes de usar el sistema fuera de un 
 
 ## Roles y permisos
 
-El frontend adapta la navegación al rol y la API vuelve a validar permisos, autenticación y establecimiento. Administración gestiona datos del establecimiento; vigilancia registra accesos e incidencias; supervisión consulta la actividad; los residentes consultan su QR y gestionan sus propias invitaciones. Las funciones QR, RFID y LPR dependen del plan del establecimiento.
+El RBAC se resuelve en Django y es la única fuente de verdad. `/api/profile/` devuelve el rol, los permisos heredados, las excepciones individuales, los permisos efectivos, las acciones permitidas, el catálogo y el menú dinámico. El frontend usa ese menú para construir la barra lateral y vuelve a validar cada operación en la API.
+
+- **Cinco roles base protegidos:** Super Admin, Administrador, Supervisor, Vigilante y Residente. No se pueden eliminar ni renombrar.
+- **Roles personalizados:** el botón **+ Nuevo Rol** solo aparece para el Super Admin y abre un modal centrado con nombre y descripción. El rol se crea con acceso inicial al Dashboard y sus permisos se ajustan después desde el mismo modal. No se puede eliminar un rol que tenga usuarios asignados.
+- **Solo Super Admin** puede editar los permisos globales de los roles y las excepciones por usuario. El Administrador de establecimiento conserva la gestión de usuarios de su propia sede, pero no puede asignar roles Administrador/Super Admin ni modificar excepciones.
+- **Permisos por módulo:** dashboard, accesos, cámaras, mi QR, usuarios, roles, catálogo, reportes y seguridad.
+- **Políticas de escritura:** `puede_editar`, `puede_eliminar` y `solo_lectura`. `solo_lectura` prevalece y bloquea toda escritura aunque los otros permisos estén activos.
+- **Excepciones granulares:** en la pestaña *Permisos Especiales* cada permiso puede quedar heredado del rol, permitido o denegado. El backend valida el JSON, rechaza claves desconocidas y aplica las excepciones al resolver el acceso.
+- **Super Admin siempre conserva** dashboard, usuarios, roles, edición y eliminación para evitar un bloqueo de plataforma. Los demás módulos pueden limitarse desde su rol; la API impide desactivar o degradar al último Super Admin activo.
+- Las cuentas desactivadas conservan su historial, pero no pueden iniciar sesión.
+
+La navegación se adapta al rol, al establecimiento y al plan. Los módulos QR, RFID y LPR dependen de las funcionalidades contratadas.
 
 ## API útil
 
 - `GET /api/health/`
-- `POST /api/identidad/auth/login/`
-- `GET /api/profile/`
+- `POST /api/identidad/auth/login/` (access en la respuesta y refresh en cookie `HttpOnly`)
+- `POST /api/identidad/auth/refresh/` (renueva el access con la cookie)
+- `POST /api/identidad/auth/logout/` (revoca el refresh y borra la cookie)
+- `GET /api/profile/` (rol, permisos efectivos, acciones y menú dinámico)
+- `/api/identidad/usuarios/` (gestión de cuentas; aislamiento por establecimiento)
+- `/api/identidad/roles/` (escritura exclusiva del Super Admin)
 - `/api/empresas/planes/`
 - `/api/empresas/establecimientos/`
 - `/api/operaciones/responsables/?id_establecimiento=1`
