@@ -9,13 +9,15 @@ Sistema web de control de acceso vehicular y gestión de establecimientos. El pr
 - Acceso de residentes mediante QR temporal o código numérico de respaldo de 6 dígitos (vence en 90 segundos y se usa una sola vez).
 - Invitaciones QR para visitantes, vinculadas con el residente anfitrión, con registro de entrada y salida.
 - RFID en los planes que lo permiten (el lector debe funcionar como teclado USB/keyboard wedge).
-- Vistas y operaciones diferenciadas por rol y establecimiento. Solo el Super Admin puede crear administradores de establecimiento y administrar roles; los administradores crean supervisores, vigilantes y residentes de su propio establecimiento.
+- Vistas y operaciones diferenciadas por rol y establecimiento. Solo el Super Admin puede crear administradores de establecimiento y administrar roles y recursos; los administradores crean supervisores, vigilantes y residentes de su propio establecimiento.
 - La administración de usuarios está limitada por establecimiento; las cuentas de Super Admin no aparecen para los administradores de conjuntos.
 - Cada establecimiento consulta únicamente su plan contratado. Los módulos no incluidos muestran un aviso y la API también aplica el límite de plan.
 - Reconocimiento de placas FastALPR basado en DNN (YOLOv9 para localizar placas y OCR ONNX para leerlas), desde una captura de cámara. Cada lectura requiere confirmación del vigilante antes de registrar el acceso.
 - Interfaz de identidad Heimdall con iconos SVG propios, ojo vigilante y acentos inspirados en Bifröst.
 - Landing comercial en `/`, inicio de sesión en `/login` y panel autenticado en `/panel`, con navegación directa y recarga segura de la SPA.
-- Creación de roles personalizados desde **+ Nuevo Rol** (solo Super Admin), además de los cinco roles base protegidos.
+- Administración RBAC de cinco tablas: usuarios, roles, recursos y las relaciones `USUARIO_HAS_ROL` y `ROL_HAS_RECURSO`. Un usuario puede tener varios roles y un rol varios recursos.
+- Vista independiente de **Recursos** para que el Super Admin cree, edite y elimine módulos o acciones del catálogo, con protección de las claves del sistema.
+- Formularios de edición, asignación y confirmación en modales centrados con overlay oscuro, tanto en escritorio como en móvil.
 
 ## Requisitos
 
@@ -98,7 +100,7 @@ No subas `backend\.env` ni `frontend\.env` a GitHub; contienen configuración lo
 
 ### 5. Prepara la base de datos
 
-**Si ya tienes una base Heimdall con datos que quieres conservar:** no ejecutes `Heimdall_Tech.sql` ni `bootstrap_db.py --execute`. El SQL elimina y vuelve a crear tablas. El script de inicio solo comprueba la conexión y aplica las adiciones de esquema necesarias de forma idempotente.
+**Si ya tienes una base Heimdall con datos que quieres conservar:** no ejecutes `Heimdall_Tech.sql` ni `bootstrap_db.py --execute`. El SQL elimina y vuelve a crear tablas. El script de inicio comprueba la conexión y las tablas base, y aplica las adiciones de esquema RBAC necesarias de forma idempotente.
 
 **Si es una instalación nueva y la base todavía no existe:** desde la carpeta `backend`, ejecuta una sola vez:
 
@@ -106,12 +108,15 @@ No subas `backend\.env` ni `frontend\.env` a GitHub; contienen configuración lo
 cd backend
 python bootstrap_db.py --check
 python bootstrap_db.py --execute
+python bootstrap_db.py --check-schema
 cd ..
 ```
 
 `--execute` crea la base `heimdall_tech` e importa `Heimdall_Tech.sql`. Úsalo únicamente en una base nueva o desechable, porque ese SQL contiene instrucciones que eliminan y vuelven a crear tablas existentes dentro de esa base. También puedes importarlo desde MySQL Workbench. El usuario configurado en `backend\.env` necesita permiso para crear bases de datos y tablas.
 
-El proyecto usa dos grupos de tablas: el SQL crea las tablas funcionales de Heimdall y el comando `manage.py migrate` crea las tablas internas de Django (autenticación y sesiones). `iniciar.ps1` ejecuta las migraciones de Django automáticamente; no borra las tablas funcionales.
+El proyecto usa dos grupos de tablas: el SQL crea las tablas funcionales de Heimdall (incluidas `RECURSO`, `USUARIO_HAS_ROL` y `ROL_HAS_RECURSO`) y el comando `manage.py migrate` crea las tablas internas de Django (autenticación y sesiones). `iniciar.ps1` comprueba que las tablas base existan, ejecuta las migraciones de Django y luego `ensure_rbac_schema` de forma idempotente; no borra las tablas funcionales.
+
+Si la base existe pero le faltan las tablas base, el script se detiene con un mensaje claro antes de continuar. Si solo faltan las tablas RBAC, `ensure_rbac_schema` las crea y convierte los permisos antiguos sin borrar usuarios ni roles.
 
 ### 6. Instala las dependencias del frontend
 
@@ -131,7 +136,7 @@ Desde la raíz del repositorio:
 powershell -ExecutionPolicy Bypass -File .\iniciar.ps1
 ```
 
-El script comprueba MySQL, aplica las migraciones internas de Django, prepara roles/cuentas demo y el esquema operativo, valida Django e inicia API y frontend. No importa el SQL ni reinicia tus datos. En una instalación nueva, importa primero `Heimdall_Tech.sql` con el paso 5.
+El script comprueba MySQL y la existencia de las tablas base, aplica las migraciones internas de Django, sincroniza el esquema RBAC de cinco tablas, prepara roles/cuentas demo y el esquema operativo, valida Django e inicia API y frontend. No importa el SQL ni reinicia tus datos. En una instalación nueva, importa primero `Heimdall_Tech.sql` con el paso 5. Si FastALPR no está disponible en el Python seleccionado, muestra un aviso y el resto del sistema sigue funcionando.
 
 #### Arranque desde Visual Studio Code
 
@@ -180,6 +185,7 @@ Terminal 1 — backend:
 cd backend
 .\.venv\Scripts\Activate.ps1
 python manage.py migrate --noinput
+python manage.py ensure_rbac_schema
 python manage.py ensure_demo_accounts
 python manage.py ensure_operational_schema
 python manage.py check
@@ -197,7 +203,7 @@ Para detener el arranque manual, usa `Ctrl+C` en cada terminal.
 
 ## Cuentas locales de demostración
 
-El comando `ensure_demo_accounts` agrega los roles necesarios y crea o repara las cuentas demo si no existen. También registra al residente como responsable de la unidad Casa 14, Torre B. Todas las cuentas de prueba comparten la contraseña `Heimdall#2026`:
+El comando `ensure_demo_accounts` agrega los roles necesarios, crea o repara las cuentas demo y sincroniza sus relaciones en `USUARIO_HAS_ROL`. También registra al residente como responsable de la unidad Casa 14, Torre B. Todas las cuentas de prueba comparten la contraseña `Heimdall#2026`:
 
 | Ámbito | Rol | Usuario | Contraseña |
 |---|---|---|---|
@@ -233,16 +239,18 @@ La autenticación usa un access token en memoria y un refresh token en cookie `H
 
 ## Roles y permisos
 
-El RBAC se resuelve en Django y es la única fuente de verdad. `/api/profile/` devuelve el rol, los permisos heredados, las excepciones individuales, los permisos efectivos, las acciones permitidas, el catálogo y el menú dinámico. El frontend usa ese menú para construir la barra lateral y vuelve a validar cada operación en la API.
+El RBAC se resuelve en Django y es la única fuente de verdad. La autorización usa cinco tablas: `USUARIO`, `ROL`, `RECURSO`, `USUARIO_HAS_ROL` y `ROL_HAS_RECURSO`. Los permisos efectivos son la unión de los recursos de todos los roles asignados, más las excepciones individuales. `/api/profile/` devuelve el rol principal, los roles asignados, los permisos heredados, las excepciones, los permisos efectivos, las acciones permitidas, el catálogo y el menú dinámico. El frontend usa ese menú para construir la barra lateral y vuelve a validar cada operación en la API.
 
 - **Cinco roles base protegidos:** Super Admin, Administrador, Supervisor, Vigilante y Residente. No se pueden eliminar ni renombrar.
-- **Roles personalizados:** el botón **+ Nuevo Rol** solo aparece para el Super Admin y abre un modal centrado con nombre y descripción. El rol se crea con acceso inicial al Dashboard y sus permisos se ajustan después desde el mismo modal. No se puede eliminar un rol que tenga usuarios asignados.
-- **Solo Super Admin** puede editar los permisos globales de los roles y las excepciones por usuario. El Administrador de establecimiento conserva la gestión de usuarios de su propia sede, pero no puede asignar roles Administrador/Super Admin ni modificar excepciones.
-- **Permisos por módulo:** dashboard, accesos, cámaras, mi QR, usuarios, roles, catálogo, reportes y seguridad.
+- **Multirrol:** un usuario puede tener varios roles en `USUARIO_HAS_ROL`. El rol principal (`USUARIO.id_rol`) define la etiqueta y los flujos de residente; la autorización suma los recursos de todos los roles. Si cualquier rol asignado es Super Admin, la cuenta se eleva.
+- **Roles personalizados:** el botón **+ Nuevo Rol** solo aparece para el Super Admin y abre un modal centrado con las pestañas *Detalles* y *Recursos*. El rol se crea con Dashboard por defecto y se puede editar o eliminar desde la tabla de roles. No se puede eliminar un rol base ni un rol que tenga usuarios asignados.
+- **Recursos:** la vista **Recursos** es exclusiva del Super Admin. Permite crear, editar y eliminar módulos o acciones del catálogo. Los recursos del sistema no se pueden eliminar, desactivar ni cambiar de clave o tipo. Un recurso personalizado solo se elimina si no tiene roles asignados.
+- **Solo Super Admin** puede editar los permisos globales de los roles, administrar el catálogo de recursos y modificar excepciones por usuario. El Administrador de establecimiento conserva la gestión de usuarios de su propia sede, pero no puede asignar roles Super Admin ni modificar excepciones.
+- **Permisos por módulo:** dashboard, accesos, cámaras, mi QR, usuarios, roles, recursos, catálogo, reportes y seguridad.
 - **Políticas de escritura:** `puede_editar`, `puede_eliminar` y `solo_lectura`. `solo_lectura` prevalece y bloquea toda escritura aunque los otros permisos estén activos.
 - **Excepciones granulares:** en la pestaña *Permisos Especiales* cada permiso puede quedar heredado del rol, permitido o denegado. El backend valida el JSON, rechaza claves desconocidas y aplica las excepciones al resolver el acceso.
-- **Super Admin siempre conserva** dashboard, usuarios, roles, edición y eliminación para evitar un bloqueo de plataforma. Los demás módulos pueden limitarse desde su rol; la API impide desactivar o degradar al último Super Admin activo.
-- Las cuentas desactivadas conservan su historial, pero no pueden iniciar sesión.
+- **Super Admin siempre conserva** dashboard, usuarios, roles, recursos, edición y eliminación para evitar un bloqueo de plataforma. Los demás módulos pueden limitarse desde su rol; la API impide desactivar o degradar al último Super Admin activo y protege al usuario contra eliminarse o desactivarse a sí mismo.
+- Las cuentas desactivadas conservan su historial, pero no pueden iniciar sesión. La eliminación de usuarios es lógica (`estado=False`).
 
 La navegación se adapta al rol, al establecimiento y al plan. Los módulos QR, RFID y LPR dependen de las funcionalidades contratadas.
 
@@ -255,6 +263,7 @@ La navegación se adapta al rol, al establecimiento y al plan. Los módulos QR, 
 - `GET /api/profile/` (rol, permisos efectivos, acciones y menú dinámico)
 - `/api/identidad/usuarios/` (gestión de cuentas; aislamiento por establecimiento)
 - `/api/identidad/roles/` (escritura exclusiva del Super Admin)
+- `/api/identidad/recursos/` (catálogo RBAC; escritura exclusiva del Super Admin)
 - `/api/empresas/planes/`
 - `/api/empresas/establecimientos/`
 - `/api/operaciones/responsables/?id_establecimiento=1`
@@ -267,8 +276,8 @@ La navegación se adapta al rol, al establecimiento y al plan. Los módulos QR, 
 
 - **No conecta con MySQL:** comprueba que el servicio esté iniciado y revisa `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NAME` en `backend\.env`.
 - **`Failed to fetch` al iniciar sesión:** confirma que el backend responde en `http://localhost:8000/api/`, que no se cerró la terminal/proceso del backend y que `VITE_API_URL` apunta a ese backend. El puerto de la web (`5173`) y el de la API (`8000`) son procesos distintos.
-- **La API indica que faltan tablas:** si es una base nueva, importa el SQL con el procedimiento del paso 5. Si ya contiene datos, haz una copia antes de cualquier cambio y no ejecutes el SQL destructivo.
-- **No abre el frontend:** confirma que `npm install` terminó y que Node.js cumple la versión mínima. El puerto predeterminado es `5173`.
+- **La API indica que faltan tablas:** si es una base nueva, importa el SQL con el procedimiento del paso 5. Si ya contiene datos, haz una copia antes de cualquier cambio y no ejecutes el SQL destructivo. `iniciar.ps1` verifica las tablas base y se detiene con instrucciones si faltan; `ensure_rbac_schema` puede añadir las tablas RBAC a una base anterior sin borrar datos.
+- **No abre el frontend:** confirma que `npm ci` o `npm install` terminó y que Node.js cumple la versión mínima. El puerto predeterminado es `5173`.
 - **No puedes usar la cámara para leer QR o placas:** concede permiso de cámara y usa `localhost` o HTTPS. Un teléfono que abra la aplicación por una dirección HTTP de red local puede bloquear la cámara; en ese caso usa HTTPS o el código manual para QR.
 - **No puedes iniciar sesión:** confirma el usuario, la contraseña y que el estado de la cuenta esté activo. Las cuentas demo se preparan al ejecutar el script de inicio.
 

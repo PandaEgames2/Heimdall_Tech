@@ -5,12 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from app_empresas.features import features_for_establecimiento
-from app_identidad.models import Rol, Usuario
+from app_identidad.models import Rol, Usuario, UsuarioHasRol
 from config.rbac import (
     build_menu,
     catalogo_permisos,
-    get_role_permissions,
     is_superadmin_profile,
+    permissions_for_roles,
+    profile_role_ids,
+    profile_roles,
     resolve_effective_permissions,
     serialize_role,
 )
@@ -25,12 +27,47 @@ def _serialize_roles(usuario_counts: dict[int, int] | None = None) -> list[dict[
 
 
 def role_user_counts() -> dict[int, int]:
+    """Cuenta usuarios por rol usando la tabla puente USUARIO_HAS_ROL."""
+
     from django.db.models import Count
 
-    return {
-        row["id_rol"]: row["total"]
-        for row in Usuario.objects.values("id_rol").annotate(total=Count("id_usuario"))
-    }
+    try:
+        rows = (
+            UsuarioHasRol.objects.values("id_rol_id")
+            .annotate(total=Count("id_usuario_id", distinct=True))
+            .order_by()
+        )
+        counts = {row["id_rol_id"]: row["total"] for row in rows}
+        if counts:
+            return counts
+    except Exception:
+        pass
+
+    try:
+        return {
+            row["id_rol"]: row["total"]
+            for row in Usuario.objects.values("id_rol").annotate(total=Count("id_usuario"))
+        }
+    except Exception:
+        return {}
+
+
+def _roles_assigned_payload(perfil: Usuario) -> list[dict[str, Any]]:
+    principal = perfil.id_rol_id
+    payload: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for role in profile_roles(perfil):
+        if role.id_rol in seen:
+            continue
+        seen.add(role.id_rol)
+        payload.append(
+            {
+                "id_rol": role.id_rol,
+                "nombre": role.nombre,
+                "es_principal": role.id_rol == principal,
+            }
+        )
+    return payload
 
 
 def build_profile_payload(user, perfil: Usuario | None) -> dict[str, Any]:
@@ -58,6 +95,7 @@ def build_profile_payload(user, perfil: Usuario | None) -> dict[str, Any]:
         "menu": [{"key": "dashboard", "label": "Dashboard", "group": "General", "icon": "dashboard", "visible": True, "locked_by_plan": False, "superadmin_only": False}],
         "catalogo_permisos": catalogo_permisos(),
         "roles": [],
+        "roles_asignados": [],
         "funcionalidades": {"manual": True, "qr": False, "rfid": False, "lpr": False},
     }
 
@@ -66,6 +104,7 @@ def build_profile_payload(user, perfil: Usuario | None) -> dict[str, Any]:
 
     is_superadmin = is_superadmin_profile(perfil, user)
     access = resolve_effective_permissions(perfil, is_superadmin=is_superadmin)
+    roles = profile_roles(perfil)
     establecimiento = perfil.id_establecimiento
     features = features_for_establecimiento(establecimiento)
 
@@ -76,7 +115,9 @@ def build_profile_payload(user, perfil: Usuario | None) -> dict[str, Any]:
             "id_establecimiento": perfil.id_establecimiento_id,
             "rol": perfil.id_rol.nombre if perfil.id_rol else "Sin rol",
             "rol_id": perfil.id_rol_id if perfil.id_rol else None,
-            "permisos_rol": get_role_permissions(perfil.id_rol),
+            "roles_ids": profile_role_ids(perfil),
+            "roles_asignados": _roles_assigned_payload(perfil),
+            "permisos_rol": permissions_for_roles(roles),
             "permisos_excepciones": perfil.permisos_excepciones or {},
             "permisos_efectivos": access["permisos"],
             "acciones": {

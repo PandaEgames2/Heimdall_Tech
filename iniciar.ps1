@@ -78,11 +78,20 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+Write-Host "Verificando tablas base de Heimdall..."
+& $Python (Join-Path $Backend "bootstrap_db.py") --check-schema
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: La base no tiene el esquema de Heimdall. En una instalación nueva ejecuta una sola vez:" -ForegroundColor Red
+    Write-Host "       python backend\bootstrap_db.py --execute" -ForegroundColor Red
+    Write-Host "       Si la base ya tenía datos, no ejecutes ese comando: revisa el mensaje anterior." -ForegroundColor Red
+    exit 1
+}
+
 Write-Host "Preparando tablas internas de Django..."
 & $Python (Join-Path $Backend "manage.py") migrate --noinput
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
-Write-Host "Sincronizando esquema y roles RBAC..."
+Write-Host "Sincronizando esquema RBAC de 5 tablas..."
 & $Python (Join-Path $Backend "manage.py") ensure_rbac_schema
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
@@ -100,6 +109,18 @@ if ($LASTEXITCODE -ne 0) { exit 1 }
 & $Python (Join-Path $Backend "manage.py") check
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
+$AlprReady = $false
+try {
+    $null = & $Python -c "import fast_alpr, cv2, numpy, onnxruntime" 2>$null
+    if ($LASTEXITCODE -eq 0) { $AlprReady = $true }
+} catch { }
+if (-not $AlprReady) {
+    Write-Host "AVISO: FastALPR no está disponible en el Python seleccionado." -ForegroundColor Yellow
+    Write-Host "       El reconocimiento de placas quedará deshabilitado; el resto del sistema funciona con normalidad." -ForegroundColor Yellow
+    Write-Host "       Instala las dependencias con: $Python -m pip install -r backend\requirements.txt" -ForegroundColor Yellow
+    Write-Host "       La primera inferencia necesita Internet para descargar los modelos DNN/OCR." -ForegroundColor Yellow
+}
+
 $NodeCommand = Get-Command node -ErrorAction SilentlyContinue
 $NpmCommand = Get-Command npm -ErrorAction SilentlyContinue
 if (-not $NodeCommand -or -not $NpmCommand) {
@@ -116,16 +137,21 @@ if (-not $NodeSupported) {
 }
 
 if (-not (Test-Path (Join-Path $Frontend "node_modules"))) {
-    Write-Host "Instalando dependencias del frontend..."
+    $NpmInstallArgs = @("install")
+    if (Test-Path (Join-Path $Frontend "package-lock.json")) {
+        $NpmInstallArgs = @("ci")
+    }
+    Write-Host "Instalando dependencias del frontend con npm $($NpmInstallArgs[0])..."
     Push-Location $Frontend
-    & $NpmCommand.Source install
+    & $NpmCommand.Source @NpmInstallArgs
+    $NpmExitCode = $LASTEXITCODE
     Pop-Location
-    if ($LASTEXITCODE -ne 0) { exit 1 }
+    if ($NpmExitCode -ne 0) { exit 1 }
 }
 
 $ViteCommand = Join-Path $Frontend "node_modules\.bin\vite.cmd"
 if (-not (Test-Path $ViteCommand)) {
-    Write-Host "ERROR: No se encontró Vite. Ejecuta npm install dentro de frontend." -ForegroundColor Red
+    Write-Host "ERROR: No se encontró Vite. Ejecuta npm ci dentro de frontend." -ForegroundColor Red
     exit 1
 }
 

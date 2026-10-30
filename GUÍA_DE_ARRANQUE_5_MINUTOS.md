@@ -43,10 +43,11 @@ En una base nueva, desde la carpeta `backend`:
 cd backend
 .\.venv\Scripts\python.exe bootstrap_db.py --check
 .\.venv\Scripts\python.exe bootstrap_db.py --execute
+.\.venv\Scripts\python.exe bootstrap_db.py --check-schema
 cd ..
 ```
 
-`--execute` importa `Heimdall_Tech.sql`, que elimina y crea tablas funcionales: úsalo solo para una base nueva o desechable. No lo ejecutes sobre datos que quieras conservar. La cuenta de MySQL debe tener permiso `CREATE DATABASE`.
+`--execute` importa `Heimdall_Tech.sql`, que elimina y crea tablas funcionales: úsalo solo para una base nueva o desechable. No lo ejecutes sobre datos que quieras conservar. La cuenta de MySQL debe tener permiso `CREATE DATABASE`. `--check-schema` confirma que las tablas base existan; si falta alguna, no continúes con el arranque hasta importar el esquema.
 
 ## 4. Instalar dependencias del frontend
 
@@ -70,9 +71,20 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 Si el archivo sigue bloqueado, usa `powershell -ExecutionPolicy Bypass -File .\iniciar.ps1`.
 
-El script comprueba MySQL, aplica migraciones internas de Django, asegura las cuentas demo y el esquema operativo, ejecuta `manage.py check` e inicia los dos servidores. No importa el SQL destructivo.
+El script comprueba MySQL y las tablas base, aplica migraciones internas de Django, sincroniza el esquema RBAC de cinco tablas, asegura las cuentas demo y el esquema operativo, ejecuta `manage.py check` e inicia los dos servidores. No importa el SQL destructivo. Si falta FastALPR muestra un aviso; el resto del sistema funciona y solo se deshabilita el reconocimiento de placas.
 
 Abre la landing en <http://localhost:5173/>, inicia sesión en <http://localhost:5173/login> y entra al panel en <http://localhost:5173/panel>. API: <http://localhost:8000/api/>. Estado: <http://localhost:8000/api/health/>.
+
+## Roles, usuarios y recursos
+
+El control de acceso usa cinco tablas: `USUARIO`, `ROL`, `RECURSO`, `USUARIO_HAS_ROL` y `ROL_HAS_RECURSO`. Desde el panel, el Super Admin puede:
+
+- Crear usuarios y asignarles varios roles, eligiendo uno como principal.
+- Crear, editar y eliminar roles personalizados, y marcar sus recursos.
+- Abrir la vista **Recursos** para administrar los módulos y acciones del catálogo.
+- Ajustar excepciones individuales de permisos por usuario.
+
+Los administradores de establecimiento pueden gestionar usuarios de su sede, pero no crear roles, recursos ni excepciones. Los roles base están protegidos y los recursos del sistema no se pueden eliminar ni desactivar. Todos los formularios se abren en modales centrados con overlay oscuro.
 
 ## Cuentas de demostración
 
@@ -99,5 +111,6 @@ Las contraseñas solo se muestran con `$env:HEIMDALL_SHOW_DEMO_CREDENTIALS=1` an
 
 - `Failed to fetch`: confirma que `http://localhost:8000/api/` responde y que frontend/backend están activos.
 - Error de MySQL: revisa servicio, puerto y credenciales en `backend\.env`.
+- Faltan tablas base: ejecuta `python backend\bootstrap_db.py --check-schema`; en una base nueva importa el SQL con `--execute`. No lo hagas sobre datos que quieras conservar.
 - Cámara bloqueada: usa `localhost` o HTTPS y concede el permiso del navegador; en QR se puede usar el código escrito.
 - El inicio completo, la configuración detallada y la guía móvil están en el [README principal](README.md) y [USO_MOVIL.md](USO_MOVIL.md).

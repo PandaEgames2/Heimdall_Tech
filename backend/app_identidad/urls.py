@@ -2,10 +2,11 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .auth_views import CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
-from .views import RolViewSet, UsuarioViewSet
+from .views import RecursoViewSet, RolViewSet, UsuarioViewSet
 
 router = DefaultRouter()
 router.register("roles", RolViewSet, basename="rol")
+router.register("recursos", RecursoViewSet, basename="recurso")
 router.register("usuarios", UsuarioViewSet, basename="usuario")
 
 urlpatterns = [

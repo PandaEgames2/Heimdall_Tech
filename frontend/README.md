@@ -29,6 +29,16 @@ Abre <http://localhost:5173/>. El método recomendado para instalar y levantar t
 
 La navegación usa la History API. En producción, el servidor web debe devolver `index.html` para `/login` y `/panel` (fallback de SPA). No uses `/app`: ese nombre coincide con el archivo legado `app.js` de la raíz y Vite lo sirve como recurso estático.
 
+## Panel administrativo y RBAC
+
+El panel construye la barra lateral con el menú que devuelve `/api/profile/` y vuelve a validar cada operación en la API. Las vistas administrativas del RBAC son:
+
+- **Usuarios:** tabla con búsqueda, filtros por rol/estado, chips de roles múltiples y confirmación antes de desactivar una cuenta.
+- **Roles y permisos:** tabla de roles base y personalizados con crear, editar y eliminar. El modal tiene las pestañas *Detalles* y *Recursos*, y guarda `recursos_ids`.
+- **Recursos:** catálogo independiente de módulos y acciones, exclusivo del Super Admin. Los recursos del sistema están protegidos y los personalizados solo se eliminan si no tienen roles asignados.
+
+Los formularios de edición, asignación y confirmación se abren en modales centrados con overlay oscuro. El diseño es responsive y funciona en la PWA móvil; no hay APK nativa.
+
 ## Comandos de desarrollo
 
 ```powershell

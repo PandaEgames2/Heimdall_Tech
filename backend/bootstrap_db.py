@@ -6,6 +6,7 @@ or CLI arguments and executes the project schema/data file.
 
 Examples:
     python bootstrap_db.py --check
+    python bootstrap_db.py --check-schema
     python bootstrap_db.py --execute
     python bootstrap_db.py --host cloud-db.example.com --user admin --password secret --database heimdall_tech --execute
 """
@@ -18,6 +19,11 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+# Tablas funcionales mínimas que no puede crear `manage.py migrate`.
+# RECURSO, USUARIO_HAS_ROL y ROL_HAS_RECURSO las añade ensure_rbac_schema
+# automáticamente sobre una base anterior.
+BASE_TABLES = ("PLAN", "ESTABLECIMIENTO", "ROL", "USUARIO")
 
 try:
     import mysql.connector
@@ -41,6 +47,7 @@ def load_project_env() -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Bootstrap the project database without Workbench.")
     parser.add_argument("--check", action="store_true", help="Solo valida que la conexión y las credenciales sean correctas.")
+    parser.add_argument("--check-schema", action="store_true", help="Verifica que la base tenga las tablas base de Heimdall.")
     parser.add_argument("--execute", action="store_true", help="Ejecuta el script SQL del proyecto en la base de datos.")
     parser.add_argument("--host", default=os.getenv("DB_HOST", "127.0.0.1"), help="Host de MySQL.")
     parser.add_argument("--port", default=os.getenv("DB_PORT", "3306"), help="Puerto de MySQL.")
@@ -96,19 +103,56 @@ def validate_connection(connection_kwargs: dict) -> None:
         connection.close()
 
 
+def validate_schema(connection_kwargs: dict, database: str) -> None:
+    try:
+        connection = mysql.connector.connect(**connection_kwargs, database=database)
+    except MySQLError as exc:
+        raise ValueError(
+            f"No se pudo abrir la base '{database}'. "
+            "Si es una instalación nueva, importa el esquema una sola vez con "
+            "`python backend/bootstrap_db.py --execute`. "
+            f"Detalle de MySQL: {exc}"
+        ) from exc
+
+    try:
+        placeholders = ", ".join(["%s"] * len(BASE_TABLES))
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT TABLE_NAME FROM information_schema.TABLES "
+                f"WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN ({placeholders})",
+                (database, *BASE_TABLES),
+            )
+            existing = {str(row[0]).upper() for row in cursor.fetchall()}
+    finally:
+        connection.close()
+
+    missing = [table for table in BASE_TABLES if table not in existing]
+    if missing:
+        raise ValueError(
+            "La base existe pero le faltan tablas base de Heimdall: "
+            + ", ".join(missing)
+            + ". Importa el esquema una sola vez con "
+            + "`python backend/bootstrap_db.py --execute` o ejecuta "
+            + "Heimdall_Tech.sql en MySQL Workbench."
+        )
+    print(f"Esquema Heimdall verificado: {len(BASE_TABLES)} tablas base presentes.")
+
+
 def main() -> int:
     load_project_env()
     parser = build_parser()
     args = parser.parse_args()
 
-    if not args.check and not args.execute:
-        parser.error("Debes usar --check o --execute.")
+    if not args.check and not args.check_schema and not args.execute:
+        parser.error("Debes usar --check, --check-schema o --execute.")
 
     connection_kwargs = get_connection_kwargs(args)
 
     try:
         if args.check:
             validate_connection(connection_kwargs)
+        if args.check_schema:
+            validate_schema(connection_kwargs, args.database)
         if args.execute:
             sql_path = Path(args.sql_file).resolve()
             sql_text = read_sql_file(sql_path)

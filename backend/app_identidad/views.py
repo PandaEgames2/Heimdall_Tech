@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from rest_framework import status, viewsets
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -6,15 +7,24 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from config.mixins import EstablecimientoQueryParamMixin
-from config.permissions import IsPlatformSuperAdminOrRoleReader, IsTenantAdmin
-from config.rbac import BASE_ROLE_NAMES
+from config.permissions import IsPlatformSuperAdmin, IsPlatformSuperAdminOrRoleReader, IsTenantAdmin
+from config.rbac import BASE_ROLE_NAMES, sync_role_permissions_cache
 from config.tenant_utils import SUPER_ADMIN_ROL_ID, get_usuario_perfil, is_platform_superadmin
 
-from .models import Rol, Usuario
+from .models import Recurso, Rol, RolHasRecurso, Usuario, UsuarioHasRol
 from .profile_service import build_profile_payload
-from .serializers import RolSerializer, UsuarioSerializer
+from .serializers import RecursoSerializer, RolSerializer, UsuarioSerializer
 
 User = get_user_model()
+
+
+def _profile_role_ids(usuario: Usuario) -> set[int]:
+    ids = {usuario.id_rol_id} if usuario.id_rol_id else set()
+    try:
+        ids.update(usuario.roles_asignados.values_list("id_rol_id", flat=True))
+    except Exception:
+        pass
+    return ids
 
 
 class PerfilUsuarioView(APIView):
@@ -22,15 +32,10 @@ class PerfilUsuarioView(APIView):
 
     def get(self, request):
         user = request.user
-        perfil = None
-
         try:
-            perfil = Usuario.objects.select_related(
-                "id_rol", "id_establecimiento", "id_establecimiento__id_plan"
-            ).filter(correo__iexact=user.email, estado=True).first()
+            perfil = get_usuario_perfil(user)
         except Exception:
             perfil = None
-
         return Response(build_profile_payload(user, perfil), status=status.HTTP_200_OK)
 
 
@@ -43,12 +48,57 @@ class RolViewSet(viewsets.ModelViewSet):
     ordering_fields = ("nombre", "id_rol")
     permission_classes = [IsPlatformSuperAdminOrRoleReader]
 
+    def get_queryset(self):
+        return (
+            Rol.objects.all()
+            .prefetch_related("recursos_asignados", "usuario_asignaciones")
+            .order_by("id_rol")
+        )
+
     def destroy(self, request, *args, **kwargs):
         role = self.get_object()
         if role.nombre in BASE_ROLE_NAMES:
             raise ValidationError({"detail": "Los roles base del sistema no se pueden eliminar."})
+        if UsuarioHasRol.objects.filter(id_rol_id=role.id_rol).exists():
+            raise ValidationError({"detail": "No se puede eliminar un rol que tiene usuarios asignados."})
         if role.usuarios.exists():
             raise ValidationError({"detail": "No se puede eliminar un rol que tiene usuarios asignados."})
+        return super().destroy(request, *args, **kwargs)
+
+
+class RecursoViewSet(viewsets.ModelViewSet):
+    serializer_class = RecursoSerializer
+    lookup_field = "id_recurso"
+    pagination_class = None
+    search_fields = ("clave", "nombre", "descripcion", "grupo")
+    ordering_fields = ("orden", "nombre", "clave")
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def get_queryset(self):
+        return Recurso.objects.all().order_by("orden", "id_recurso")
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        new_state = serializer.validated_data.get("estado", instance.estado)
+        if new_state is False and RolHasRecurso.objects.filter(id_recurso_id=instance.id_recurso).exists():
+            raise ValidationError(
+                {"estado": "No puedes desactivar un recurso que está asignado a uno o más roles."}
+            )
+        recurso = serializer.save()
+        # La clave puede cambiar: recalcula la caché JSON de los roles afectados.
+        role_ids = set(
+            RolHasRecurso.objects.filter(id_recurso_id=recurso.id_recurso)
+            .values_list("id_rol_id", flat=True)
+        )
+        for role_id in role_ids:
+            sync_role_permissions_cache(role_id)
+
+    def destroy(self, request, *args, **kwargs):
+        recurso = self.get_object()
+        if recurso.es_sistema:
+            raise ValidationError({"detail": "Los recursos del sistema no se pueden eliminar."})
+        if RolHasRecurso.objects.filter(id_recurso_id=recurso.id_recurso).exists():
+            raise ValidationError({"detail": "No se puede eliminar un recurso asignado a un rol."})
         return super().destroy(request, *args, **kwargs)
 
 
@@ -61,20 +111,29 @@ class UsuarioViewSet(EstablecimientoQueryParamMixin, viewsets.ModelViewSet):
     permission_classes = [IsTenantAdmin]
 
     def get_base_queryset(self):
-        queryset = Usuario.objects.select_related("id_rol", "id_establecimiento")
+        queryset = Usuario.objects.select_related(
+            "id_rol", "id_establecimiento"
+        ).prefetch_related("roles_asignados__id_rol")
         # Los administradores de establecimiento nunca deben ver cuentas de
         # Super Admin, incluso cuando esas cuentas comparten establecimiento.
         if not is_platform_superadmin(self.request.user):
-            queryset = queryset.exclude(id_rol_id=SUPER_ADMIN_ROL_ID)
+            queryset = queryset.exclude(
+                Q(id_rol_id=SUPER_ADMIN_ROL_ID)
+                | Q(roles_asignados__id_rol_id=SUPER_ADMIN_ROL_ID)
+            ).distinct()
         return queryset
 
     def _apply_filters(self, queryset):
         role_id = self.request.query_params.get("id_rol")
         if role_id:
             try:
-                queryset = queryset.filter(id_rol_id=int(role_id))
+                normalized_role = int(role_id)
             except (TypeError, ValueError):
                 raise ValidationError({"id_rol": "Debe ser un entero válido."})
+            queryset = queryset.filter(
+                Q(id_rol_id=normalized_role)
+                | Q(roles_asignados__id_rol_id=normalized_role)
+            ).distinct()
         estado = self.request.query_params.get("estado")
         if estado is not None and estado != "":
             normalized = str(estado).strip().lower()
@@ -128,11 +187,19 @@ class UsuarioViewSet(EstablecimientoQueryParamMixin, viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         usuario = self.get_object()
-        if usuario.id_rol_id == SUPER_ADMIN_ROL_ID:
-            other_active = Usuario.objects.filter(
-                id_rol_id=SUPER_ADMIN_ROL_ID,
-                estado=True,
-            ).exclude(pk=usuario.pk)
+        perfil_solicitante = get_usuario_perfil(request.user)
+        if perfil_solicitante and perfil_solicitante.id_usuario == usuario.id_usuario:
+            raise ValidationError("No puedes eliminar tu propia cuenta.")
+        if SUPER_ADMIN_ROL_ID in _profile_role_ids(usuario):
+            other_active = (
+                Usuario.objects.filter(estado=True)
+                .filter(
+                    Q(id_rol_id=SUPER_ADMIN_ROL_ID)
+                    | Q(roles_asignados__id_rol_id=SUPER_ADMIN_ROL_ID)
+                )
+                .exclude(pk=usuario.pk)
+                .distinct()
+            )
             if not other_active.exists():
                 raise ValidationError(
                     "No puedes eliminar al último Super Admin activo de la plataforma."

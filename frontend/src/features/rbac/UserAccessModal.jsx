@@ -9,6 +9,7 @@ const FALLBACK_CATALOG = [
   { key: 'mi_qr', label: 'Mi QR e invitados', group: 'Operación', description: 'QR de residente e invitaciones.', tipo: 'modulo' },
   { key: 'usuarios', label: 'Usuarios', group: 'Administración', description: 'Gestión de cuentas.', tipo: 'modulo' },
   { key: 'roles', label: 'Roles y permisos', group: 'Administración', description: 'Permisos globales de los roles.', tipo: 'modulo' },
+  { key: 'recursos', label: 'Recursos', group: 'Administración', description: 'Catálogo de módulos y acciones.', tipo: 'modulo' },
   { key: 'catalogos', label: 'Catálogo', group: 'Administración', description: 'Planes, sedes, vehículos y responsables.', tipo: 'modulo' },
   { key: 'reportes', label: 'Reportes', group: 'Administración', description: 'Historial y trazabilidad.', tipo: 'modulo' },
   { key: 'seguridad', label: 'Seguridad', group: 'Sistema', description: 'Auditoría y estado del sistema.', tipo: 'modulo' },
@@ -18,7 +19,7 @@ const FALLBACK_CATALOG = [
 ];
 
 const FALLBACK_ROLES = [
-  { id_rol: 4, nombre: 'Super Admin', descripcion: 'Administración global de la plataforma y del RBAC.', permisos: ['dashboard', 'accesos', 'camaras', 'mi_qr', 'usuarios', 'roles', 'catalogos', 'reportes', 'seguridad', 'puede_editar', 'puede_eliminar'] },
+  { id_rol: 4, nombre: 'Super Admin', descripcion: 'Administración global de la plataforma y del RBAC.', permisos: ['dashboard', 'accesos', 'camaras', 'mi_qr', 'usuarios', 'roles', 'recursos', 'catalogos', 'reportes', 'seguridad', 'puede_editar', 'puede_eliminar'] },
   { id_rol: 1, nombre: 'Administrador', descripcion: 'Control operativo y de usuarios de su establecimiento.', permisos: ['dashboard', 'usuarios', 'catalogos', 'reportes', 'camaras', 'accesos', 'puede_editar', 'puede_eliminar'] },
   { id_rol: 3, nombre: 'Supervisor', descripcion: 'Auditoría, reportes y supervisión de la operación.', permisos: ['dashboard', 'reportes', 'camaras', 'accesos'] },
   { id_rol: 2, nombre: 'Vigilante', descripcion: 'Operación de portería, accesos y novedades.', permisos: ['dashboard', 'camaras', 'accesos'] },
@@ -27,9 +28,21 @@ const FALLBACK_ROLES = [
 
 const TABS = [
   { key: 'general', label: 'Datos Generales' },
-  { key: 'role', label: 'Asignar Rol' },
+  { key: 'role', label: 'Roles' },
   { key: 'permissions', label: 'Permisos Especiales' },
 ];
+
+const ASSIGNABLE_TENANT_ROLES = [2, 3, 5];
+
+const normalizeCatalogItem = (item) => ({
+  ...item,
+  key: item.key || item.clave || '',
+  label: item.label || item.nombre || item.clave || '',
+  group: item.group || item.grupo || 'General',
+  description: item.description || item.descripcion || '',
+  tipo: item.tipo || 'modulo',
+  estado: item.estado !== false,
+});
 
 const emptyForm = (defaultEstablishmentId, defaultRoleId) => ({
   nombre: '',
@@ -38,6 +51,7 @@ const emptyForm = (defaultEstablishmentId, defaultRoleId) => ({
   estado: true,
   id_establecimiento: defaultEstablishmentId || '',
   id_rol: defaultRoleId || 2,
+  roles_ids: [Number(defaultRoleId || 2)],
   residente_documento: '',
   residente_telefono: '',
   residente_unidad: '',
@@ -56,16 +70,41 @@ export default function UserAccessModal({
   onSaved,
 }) {
   const isEditing = Boolean(user?.id);
-  const wasResident = isEditing && Number(user?.id_rol || user?.rolId) === 5;
-  const permissionCatalog = catalogo.length > 0 ? catalogo : FALLBACK_CATALOG;
-  const roleList = isSuperAdmin && roles.length > 0 ? roles : (roles.length > 0 ? roles : FALLBACK_ROLES);
-  const assignableRoleIds = [2, 3, 5];
-  const currentRoleId = user ? Number(user.id_rol || user.rolId || 0) : null;
-  const availableRoles = isSuperAdmin
-    ? roleList
-    : roleList.filter((role) => (
-      assignableRoleIds.includes(Number(role.id_rol)) || Number(role.id_rol) === currentRoleId
-    ));
+  const permissionCatalog = useMemo(
+    () => (catalogo.length > 0 ? catalogo : FALLBACK_CATALOG).map(normalizeCatalogItem),
+    [catalogo],
+  );
+
+  const roleList = useMemo(() => {
+    const source = roles.length > 0 ? roles : FALLBACK_ROLES;
+    const seen = new Set();
+    return source.filter((role) => {
+      const id = Number(role.id_rol);
+      if (!Number.isFinite(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    }).map((role) => ({
+      ...role,
+      id_rol: Number(role.id_rol),
+      permisos: Array.isArray(role.permisos) ? role.permisos : [],
+    }));
+  }, [roles]);
+
+  const initialRoleIds = useMemo(() => {
+    if (!user) return null;
+    if (Array.isArray(user.roles_ids) && user.roles_ids.length > 0) {
+      return [...new Set(user.roles_ids.map(Number))];
+    }
+    if (Array.isArray(user.roles) && user.roles.length > 0) {
+      return [...new Set(user.roles.map((role) => Number(role.id_rol)))];
+    }
+    return [Number(user.id_rol || user.rolId || 2)];
+  }, [user]);
+
+  const currentRoleIds = initialRoleIds || [];
+  const initialPrincipal = Number(user?.id_rol || user?.rolId || currentRoleIds[0] || (isSuperAdmin ? 1 : 2));
+  const rolesLocked = !isSuperAdmin
+    && currentRoleIds.some((roleId) => !ASSIGNABLE_TENANT_ROLES.includes(roleId));
 
   const initial = useMemo(() => (user ? {
     nombre: user.nombre || '',
@@ -73,12 +112,20 @@ export default function UserAccessModal({
     password: '',
     estado: user.activo ?? (user.estado === 'Activo' || user.estado === true),
     id_establecimiento: user.id_establecimiento || defaultEstablishmentId || '',
-    id_rol: Number(user.id_rol || user.rolId || 2),
+    id_rol: initialPrincipal,
+    roles_ids: initialRoleIds,
     residente_documento: '',
     residente_telefono: '',
     residente_unidad: '',
-  } : emptyForm(defaultEstablishmentId, isSuperAdmin ? 1 : 2)), [user, defaultEstablishmentId, isSuperAdmin]);
+  } : emptyForm(defaultEstablishmentId, isSuperAdmin ? 1 : 2)), [
+    user,
+    defaultEstablishmentId,
+    isSuperAdmin,
+    initialPrincipal,
+    initialRoleIds,
+  ]);
 
+  const wasResident = isEditing && Number(user?.id_rol || user?.rolId) === 5;
   const [activeTab, setActiveTab] = useState(initialTab);
   const [form, setForm] = useState(initial);
   const [overrides, setOverrides] = useState(user?.permisos_excepciones || {});
@@ -86,10 +133,23 @@ export default function UserAccessModal({
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  const selectedRole = roleList.find((role) => Number(role.id_rol) === Number(form.id_rol))
-    || availableRoles[0]
-    || FALLBACK_ROLES[1];
-  const rolePermissions = new Set(selectedRole?.permisos || []);
+  const assignableRoleIds = isSuperAdmin
+    ? roleList.map((role) => role.id_rol)
+    : [...ASSIGNABLE_TENANT_ROLES, ...currentRoleIds];
+
+  const availableRoles = roleList.filter((role) => assignableRoleIds.includes(role.id_rol));
+  const selectedRoles = form.roles_ids
+    .map((roleId) => roleList.find((role) => role.id_rol === Number(roleId)))
+    .filter(Boolean);
+  const principalRole = roleList.find((role) => role.id_rol === Number(form.id_rol))
+    || selectedRoles[0]
+    || null;
+
+  const inheritedPermissions = useMemo(() => {
+    const union = new Set();
+    selectedRoles.forEach((role) => role.permisos.forEach((key) => union.add(key)));
+    return union;
+  }, [selectedRoles]);
 
   const groupedCatalog = useMemo(() => {
     const groups = new Map();
@@ -103,7 +163,7 @@ export default function UserAccessModal({
 
   const effectivePermission = (key) => {
     if (Object.prototype.hasOwnProperty.call(overrides, key)) return Boolean(overrides[key]);
-    return rolePermissions.has(key);
+    return inheritedPermissions.has(key);
   };
 
   const permissionMode = (key) => {
@@ -123,14 +183,39 @@ export default function UserAccessModal({
 
   const resetRow = (key) => setPermissionMode(key, 'inherit');
 
-  const requestClose = () => {
-    if (dirty && !window.confirm('Hay cambios sin guardar. ¿Deseas descartar los cambios?')) return;
-    onClose();
-  };
-
   const update = (patch) => {
     setDirty(true);
     setForm((current) => ({ ...current, ...patch }));
+  };
+
+  const toggleRole = (role) => {
+    if (rolesLocked) return;
+    const roleId = Number(role.id_rol);
+    const selected = form.roles_ids.includes(roleId);
+    if (selected && form.roles_ids.length <= 1) return;
+    setDirty(true);
+    setForm((current) => {
+      const nextIds = selected
+        ? current.roles_ids.filter((id) => id !== roleId)
+        : [...current.roles_ids, roleId];
+      let nextPrincipal = current.id_rol;
+      if (!nextIds.includes(Number(nextPrincipal))) {
+        nextPrincipal = nextIds[0];
+      }
+      return { ...current, roles_ids: nextIds, id_rol: Number(nextPrincipal) };
+    });
+  };
+
+  const makePrincipal = (roleId) => {
+    if (rolesLocked) return;
+    if (!form.roles_ids.includes(Number(roleId))) return;
+    setDirty(true);
+    setForm((current) => ({ ...current, id_rol: Number(roleId) }));
+  };
+
+  const requestClose = () => {
+    if (dirty && !window.confirm('Hay cambios sin guardar. ¿Deseas descartar los cambios?')) return;
+    onClose();
   };
 
   const handleSave = async (event) => {
@@ -151,6 +236,11 @@ export default function UserAccessModal({
       setActiveTab('general');
       return;
     }
+    if (form.roles_ids.length === 0) {
+      setError('Selecciona al menos un rol para el usuario.');
+      setActiveTab('role');
+      return;
+    }
     if (Number(form.id_rol) === 5 && !wasResident && !form.residente_documento.trim()) {
       setError('El documento es obligatorio para registrar un residente.');
       setActiveTab('general');
@@ -165,6 +255,9 @@ export default function UserAccessModal({
         id_rol: Number(form.id_rol),
         estado: Boolean(form.estado),
       };
+      if (!rolesLocked || !isEditing) {
+        payload.roles_ids = form.roles_ids.map(Number);
+      }
       if (form.password.trim()) payload.password = form.password;
       if (isSuperAdmin) {
         payload.id_establecimiento = Number(form.id_establecimiento || defaultEstablishmentId);
@@ -203,7 +296,7 @@ export default function UserAccessModal({
       onClose={requestClose}
       eyebrow={isEditing ? 'Editar cuenta' : 'Nueva cuenta'}
       title={isEditing ? form.nombre || 'Editar usuario' : 'Crear usuario'}
-      description="Los permisos especiales sobreescriben el rol. El backend valida cada acceso."
+      description="Los roles se suman en USUARIO_HAS_ROL. El rol principal define la etiqueta y los flujos de residente."
       size="lg"
       footer={(
         <>
@@ -280,6 +373,19 @@ export default function UserAccessModal({
               </button>
             </div>
 
+            <div className="rbac-subcard">
+              <div className="rbac-subcard-title">
+                <strong>Rol principal</strong>
+                <small>{principalRole?.nombre || 'Sin rol principal'} · {form.roles_ids.length} rol(es) asignado(s)</small>
+              </div>
+              <div className="rbac-pill-list">
+                <span className="rbac-role-chip is-primary">{principalRole?.nombre || 'Sin rol'}<em>Principal</em></span>
+                {selectedRoles.filter((role) => role.id_rol !== Number(form.id_rol)).map((role) => (
+                  <span className="rbac-role-chip" key={role.id_rol}>{role.nombre}</span>
+                ))}
+              </div>
+            </div>
+
             {Number(form.id_rol) === 5 ? (
               <div className="rbac-subcard">
                 <div className="rbac-subcard-title">
@@ -307,42 +413,95 @@ export default function UserAccessModal({
 
         {activeTab === 'role' ? (
           <div className="rbac-tab-panel">
-            <p className="rbac-help">El rol define los permisos heredados. Las excepciones de la pestaña siguiente se aplican encima.</p>
-            <div className="rbac-role-grid" role="radiogroup" aria-label="Rol principal">
+            <p className="rbac-help">
+              Puedes asignar varios roles. Los permisos se suman; el rol principal solo define la etiqueta y los flujos de residente.
+            </p>
+
+            {rolesLocked ? (
+              <div className="rbac-alert rbac-alert-info">
+                Solo un Super Admin puede cambiar los roles de esta cuenta. Puedes editar sus datos generales.
+              </div>
+            ) : null}
+
+            <div className="rbac-role-grid" role="group" aria-label="Roles asignados">
               {availableRoles.map((role) => {
-                const checked = Number(role.id_rol) === Number(form.id_rol);
-                const assignable = isSuperAdmin || assignableRoleIds.includes(Number(role.id_rol));
+                const checked = form.roles_ids.includes(role.id_rol);
+                const isPrincipal = Number(form.id_rol) === role.id_rol;
+                const onlySelected = checked && form.roles_ids.length === 1;
                 return (
-                  <button
+                  <div
                     key={role.id_rol}
-                    type="button"
-                    role="radio"
-                    aria-checked={checked}
-                    disabled={!assignable}
-                    className={`rbac-role-card ${checked ? 'is-selected' : ''} ${!assignable ? 'is-locked' : ''}`}
-                    onClick={() => update({ id_rol: Number(role.id_rol) })}
+                    className={`rbac-role-card rbac-role-card-selectable ${checked ? 'is-selected' : ''} ${rolesLocked ? 'is-locked' : ''}`}
                   >
-                    <span className="rbac-role-radio" aria-hidden="true" />
-                    <strong>{role.nombre}</strong>
-                    <small>{role.descripcion || 'Rol del sistema'}</small>
-                    <span className="rbac-role-meta">{role.permisos?.length || 0} permisos</span>
-                    {role.es_sistema ? <span className="rbac-badge">Rol base</span> : null}
-                  </button>
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={checked}
+                      className="rbac-role-select"
+                      disabled={rolesLocked || onlySelected}
+                      onClick={() => toggleRole(role)}
+                    >
+                      <span className="rbac-role-check" aria-hidden="true">{checked ? '✓' : ''}</span>
+                      <span className="rbac-role-select-text">
+                        <strong>{role.nombre}</strong>
+                        <small>{role.descripcion || 'Rol del sistema'}</small>
+                        <span className="rbac-role-meta">
+                          {role.recursos_count ?? role.permisos?.length ?? 0} recurso(s)
+                        </span>
+                      </span>
+                    </button>
+                    <div className="rbac-role-card-footer">
+                      {isPrincipal
+                        ? <span className="rbac-badge rbac-badge-gold">Rol principal</span>
+                        : (
+                          <button
+                            type="button"
+                            className="rbac-btn rbac-btn-ghost rbac-btn-small"
+                            disabled={!checked || rolesLocked}
+                            onClick={() => makePrincipal(role.id_rol)}
+                          >
+                            Hacer principal
+                          </button>
+                        )}
+                      {role.es_sistema ? <span className="rbac-badge">Base</span> : <span className="rbac-badge">Personalizado</span>}
+                    </div>
+                  </div>
                 );
               })}
             </div>
-            {selectedRole ? (
+
+            <div className="rbac-subcard">
+              <div className="rbac-subcard-title">
+                <strong>Rol principal</strong>
+                <small>El backend usa este rol para JWT, etiqueta y flujos de residente.</small>
+              </div>
+              <label className="rbac-field">
+                <span>Selecciona el rol principal</span>
+                <select
+                  value={form.id_rol}
+                  disabled={rolesLocked}
+                  onChange={(event) => makePrincipal(Number(event.target.value))}
+                >
+                  {selectedRoles.map((role) => (
+                    <option key={role.id_rol} value={role.id_rol}>{role.nombre}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {selectedRoles.length > 0 ? (
               <div className="rbac-subcard">
                 <div className="rbac-subcard-title">
-                  <strong>Permisos heredados de {selectedRole.nombre}</strong>
-                  <small>Puedes permitir o denegar excepciones en la siguiente pestaña.</small>
+                  <strong>Permisos heredados (unión de roles)</strong>
+                  <small>{inheritedPermissions.size} permiso(s) efectivos antes de excepciones.</small>
                 </div>
                 <div className="rbac-pill-list">
-                  {selectedRole.permisos?.map((key) => (
+                  {[...inheritedPermissions].map((key) => (
                     <span className="rbac-pill" key={key}>
                       {permissionCatalog.find((item) => item.key === key)?.label || key}
                     </span>
                   ))}
+                  {inheritedPermissions.size === 0 ? <span className="rbac-muted">Sin permisos heredados</span> : null}
                 </div>
               </div>
             ) : null}
@@ -354,7 +513,7 @@ export default function UserAccessModal({
             <div className="rbac-permissions-head">
               <div>
                 <strong>Permisos granulares</strong>
-                <p>Heredado usa el rol. Permitido y Denegado crean una excepción individual.</p>
+                <p>Heredado usa la unión de roles. Permitido y Denegado crean una excepción individual.</p>
               </div>
               <button type="button" className="rbac-btn rbac-btn-ghost rbac-btn-small" onClick={() => { setOverrides({}); setDirty(true); }}>
                 Restablecer todo
@@ -363,7 +522,7 @@ export default function UserAccessModal({
 
             {!isSuperAdmin ? (
               <div className="rbac-alert rbac-alert-info">
-                Solo un Super Admin puede modificar excepciones individuales. Puedes editar los datos y el rol.
+                Solo un Super Admin puede modificar excepciones individuales. Puedes editar los datos y los roles permitidos.
               </div>
             ) : null}
 
@@ -373,7 +532,7 @@ export default function UserAccessModal({
                 <div className="rbac-permission-list">
                   {items.map((item) => {
                     const mode = permissionMode(item.key);
-                    const inherited = rolePermissions.has(item.key);
+                    const inherited = inheritedPermissions.has(item.key);
                     return (
                       <div className={`rbac-permission-row ${mode !== 'inherit' ? 'has-override' : ''}`} key={item.key}>
                         <div className="rbac-permission-label">

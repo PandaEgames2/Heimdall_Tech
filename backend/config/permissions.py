@@ -6,11 +6,12 @@ from .tenant_utils import (
     RESIDENTE_ROL_ID,
     get_usuario_perfil,
     is_platform_superadmin,
+    profile_has_role,
 )
 
 # Módulos administrativos: crear exige `puede_editar`. En módulos operativos
 # (accesos, mi_qr) el personal puede crear registros sin ser administrador.
-ADMIN_MODULES = {"usuarios", "roles", "catalogos", "seguridad", "config"}
+ADMIN_MODULES = {"usuarios", "roles", "recursos", "catalogos", "seguridad", "config"}
 
 
 def _module_for_view(view, profile=None, request=None):
@@ -21,6 +22,8 @@ def _module_for_view(view, profile=None, request=None):
             return "usuarios"
         if view_name == "RolViewSet":
             return "roles"
+        if view_name == "RecursoViewSet":
+            return "recursos"
     if module_name.endswith("app_empresas.views"):
         return "catalogos"
     if module_name.endswith("app_inteligencia.views"):
@@ -31,7 +34,7 @@ def _module_for_view(view, profile=None, request=None):
         if view_name == "ResponsableViewSet":
             return "catalogos"
         if view_name == "InvitacionVisitanteViewSet":
-            return "mi_qr" if profile and profile.id_rol_id == RESIDENTE_ROL_ID else "accesos"
+            return "mi_qr" if profile and profile_has_role(profile, RESIDENTE_ROL_ID) else "accesos"
         if view_name in {"MisVehiculosView", "QRResidenteView"}:
             return "mi_qr"
         if view_name in {"MovimientoViewSet", "IncidenciaViewSet"} and getattr(view, "action", "") in {"list", "retrieve"}:
@@ -68,7 +71,7 @@ def _allows_write(request, access, module):
 
 
 class IsPlatformSuperAdmin(BasePermission):
-    message = "Solo un Super Admin puede administrar los roles globales."
+    message = "Solo un Super Admin puede administrar roles y recursos globales."
 
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and is_platform_superadmin(request.user))
@@ -154,7 +157,7 @@ class IsResident(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
         perfil, access = _access_for(request)
-        if not perfil or perfil.id_rol_id != RESIDENTE_ROL_ID:
+        if not perfil or not profile_has_role(perfil, RESIDENTE_ROL_ID):
             return False
         module = _module_for_view(view, perfil, request)
         if module is not None and module not in access["permisos"]:

@@ -13,8 +13,11 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- -----------------------------------------------------------------------------
--- TABLA: PLAN
+-- ELIMINACIÓN (orden inverso a las dependencias)
 -- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS USUARIO_HAS_ROL;
+DROP TABLE IF EXISTS ROL_HAS_RECURSO;
+DROP TABLE IF EXISTS RECURSO;
 DROP TABLE IF EXISTS INVITACION_VISITANTE;
 DROP TABLE IF EXISTS INCIDENCIA;
 DROP TABLE IF EXISTS RECONOCIMIENTO_PLACA;
@@ -63,6 +66,24 @@ CREATE TABLE ROL (
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------
+-- TABLA: RECURSO (catálogo RBAC de módulos y acciones)
+-- -----------------------------------------------------------------------------
+CREATE TABLE RECURSO (
+    id_recurso INT AUTO_INCREMENT PRIMARY KEY,
+    clave VARCHAR(50) NOT NULL,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion VARCHAR(200) NULL,
+    grupo VARCHAR(50) NOT NULL DEFAULT 'General',
+    tipo ENUM('modulo', 'accion') NOT NULL DEFAULT 'modulo',
+    estado BOOLEAN NOT NULL DEFAULT TRUE,
+    orden INT NOT NULL DEFAULT 0,
+    es_sistema BOOLEAN NOT NULL DEFAULT FALSE,
+    CONSTRAINT uk_recurso_clave UNIQUE (clave),
+    INDEX ix_recurso_orden (orden),
+    INDEX ix_recurso_tipo (tipo)
+) ENGINE=InnoDB;
+
+-- -----------------------------------------------------------------------------
 -- TABLA: USUARIO
 -- -----------------------------------------------------------------------------
 CREATE TABLE USUARIO (
@@ -80,6 +101,37 @@ CREATE TABLE USUARIO (
     CONSTRAINT fk_usuario_rol FOREIGN KEY (id_rol)
         REFERENCES ROL (id_rol) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT uk_usuario_correo_est UNIQUE (id_establecimiento, correo)
+) ENGINE=InnoDB;
+
+-- -----------------------------------------------------------------------------
+-- TABLA: USUARIO_HAS_ROL (un usuario puede desempeñar varios roles)
+-- -----------------------------------------------------------------------------
+CREATE TABLE USUARIO_HAS_ROL (
+    id_usuario_has_rol BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario INT NOT NULL,
+    id_rol INT NOT NULL,
+    fecha_asignacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_uhr_usuario FOREIGN KEY (id_usuario)
+        REFERENCES USUARIO (id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_uhr_rol FOREIGN KEY (id_rol)
+        REFERENCES ROL (id_rol) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT uk_uhr_usuario_rol UNIQUE (id_usuario, id_rol),
+    INDEX ix_uhr_rol (id_rol)
+) ENGINE=InnoDB;
+
+-- -----------------------------------------------------------------------------
+-- TABLA: ROL_HAS_RECURSO (recursos habilitados por rol)
+-- -----------------------------------------------------------------------------
+CREATE TABLE ROL_HAS_RECURSO (
+    id_rol_has_recurso BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_rol INT NOT NULL,
+    id_recurso INT NOT NULL,
+    CONSTRAINT fk_rhr_rol FOREIGN KEY (id_rol)
+        REFERENCES ROL (id_rol) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_rhr_recurso FOREIGN KEY (id_recurso)
+        REFERENCES RECURSO (id_recurso) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT uk_rhr_rol_recurso UNIQUE (id_rol, id_recurso),
+    INDEX ix_rhr_recurso (id_recurso)
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------
@@ -248,22 +300,52 @@ INSERT INTO ROL (id_rol, nombre, descripcion, permisos) VALUES
 (1, 'Administrador', 'Control total del establecimiento', '["dashboard","usuarios","catalogos","reportes","camaras","accesos","puede_editar","puede_eliminar"]'),
 (2, 'Vigilante', 'Operador de garita o portería', '["dashboard","camaras","accesos"]'),
 (3, 'Supervisor', 'Auditoría y reportes', '["dashboard","reportes","camaras","accesos"]'),
-(4, 'Super Admin', 'Administración global de la plataforma y del RBAC', '["dashboard","accesos","camaras","mi_qr","usuarios","roles","catalogos","reportes","seguridad","puede_editar","puede_eliminar"]'),
+(4, 'Super Admin', 'Administración global de la plataforma y del RBAC', '["dashboard","accesos","camaras","mi_qr","usuarios","roles","recursos","catalogos","reportes","seguridad","puede_editar","puede_eliminar"]'),
 (5, 'Residente', 'Consulta su QR y administra invitaciones de visitantes', '["mi_qr"]');
 
+-- Catálogo RBAC: 10 módulos + 3 acciones. `es_sistema` protege las claves base.
+INSERT INTO RECURSO (id_recurso, clave, nombre, descripcion, grupo, tipo, estado, orden, es_sistema) VALUES
+(1, 'dashboard', 'Dashboard', 'Resumen operativo y métricas del establecimiento.', 'General', 'modulo', TRUE, 10, TRUE),
+(2, 'accesos', 'Control de acceso', 'Registrar y consultar ingresos, salidas e incidencias.', 'Operación', 'modulo', TRUE, 20, TRUE),
+(3, 'camaras', 'Cámaras', 'Captura y reconocimiento de placas con LPR/IA.', 'Operación', 'modulo', TRUE, 30, TRUE),
+(4, 'mi_qr', 'Mi QR e invitados', 'QR temporal de residente e invitaciones de visitantes.', 'Operación', 'modulo', TRUE, 40, TRUE),
+(5, 'usuarios', 'Usuarios', 'Consultar, crear y actualizar las cuentas del establecimiento.', 'Administración', 'modulo', TRUE, 50, TRUE),
+(6, 'roles', 'Roles y permisos', 'Definir los recursos globales de los roles.', 'Administración', 'modulo', TRUE, 60, TRUE),
+(7, 'recursos', 'Recursos', 'Administrar el catálogo de módulos y acciones del RBAC.', 'Administración', 'modulo', TRUE, 70, TRUE),
+(8, 'catalogos', 'Catálogo', 'Planes, establecimientos, vehículos y responsables.', 'Administración', 'modulo', TRUE, 80, TRUE),
+(9, 'reportes', 'Reportes', 'Historial de movimientos, incidencias y reconocimientos.', 'Administración', 'modulo', TRUE, 90, TRUE),
+(10, 'seguridad', 'Seguridad', 'Panel de seguridad, auditoría y estado del sistema.', 'Sistema', 'modulo', TRUE, 100, TRUE),
+(11, 'puede_editar', 'Permiso de edición', 'Habilita cambios sobre la configuración y los registros administrativos.', 'Políticas de escritura', 'accion', TRUE, 110, TRUE),
+(12, 'puede_eliminar', 'Permiso de eliminación', 'Habilita operaciones destructivas sobre registros.', 'Políticas de escritura', 'accion', TRUE, 120, TRUE),
+(13, 'solo_lectura', 'Solo lectura', 'Prevalece sobre edición y eliminación; bloquea toda escritura.', 'Políticas de escritura', 'accion', TRUE, 130, TRUE);
+
+-- Super Admin = 12 recursos (todos los módulos + edición/eliminación).
+-- Administrador = 8 · Supervisor = 4 · Vigilante = 3 · Residente = 1.
+INSERT INTO ROL_HAS_RECURSO (id_rol, id_recurso) VALUES
+(4, 1), (4, 2), (4, 3), (4, 4), (4, 5), (4, 6), (4, 7), (4, 8), (4, 9), (4, 10), (4, 11), (4, 12),
+(1, 1), (1, 2), (1, 3), (1, 5), (1, 8), (1, 9), (1, 11), (1, 12),
+(3, 1), (3, 2), (3, 3), (3, 9),
+(2, 1), (2, 2), (2, 3),
+(5, 4);
+
 INSERT INTO USUARIO (id_usuario, id_establecimiento, id_rol, nombre, correo, password_hash) VALUES
-(1, 1, 1, 'Carlos Admin Pinos', 'admin@pinos.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
-(2, 1, 2, 'Jose Vigilante Pinos', 'vigilante@pinos.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
-(3, 1, 2, 'Luis Vigilante Pinos', 'vigilante2@pinos.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
-(4, 2, 1, 'Ana Admin Norte', 'admin@norte.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
-(5, 2, 2, 'Pedro Vigilante Norte', 'vigilante@norte.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
-(6, 3, 1, 'Rector Admin Uniguajira', 'admin@uniguajira.edu.co', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
-(7, 3, 2, 'Mario Vigilante Uniguajira', 'porteria@uniguajira.edu.co', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
-(8, 3, 3, 'Sofia Supervisora', 'supervision@uniguajira.edu.co', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
-(9, 4, 1, 'Juan Admin Logístico', 'admin@logistico.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
-(10, 4, 2, 'Diego Vigilante Logístico', 'porteria@logistico.com', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
-(11, 1, 4, 'admin', 'admin@heimdall.tech', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ='),
-(12, 1, 4, 'rastor36', 'rastor36@heimdall.tech', 'pbkdf2_sha256$1000000$5co9a6uVq7B2BQ0ZdztH2Z$XQ6uioRetk65T/45HeLyBiuhhehb/dLpJGiPz/tpnKQ=');
+(1, 1, 1, 'Carlos Admin Pinos', 'admin@pinos.com', 'pbkdf2_sha256$1000000$d4UZo1hiDlHsWRKAoa6xGs$p8IU4ad5WqrDWP8aFlpalpXGjJBJJ07NaXPI8p0Gk4I='),
+(2, 1, 2, 'Jose Vigilante Pinos', 'vigilante@pinos.com', 'pbkdf2_sha256$1000000$d4UZo1hiDlHsWRKAoa6xGs$p8IU4ad5WqrDWP8aFlpalpXGjJBJJ07NaXPI8p0Gk4I='),
+(3, 1, 2, 'Luis Vigilante Pinos', 'vigilante2@pinos.com', 'pbkdf2_sha256$1000000$d4UZo1hiDlHsWRKAoa6xGs$p8IU4ad5WqrDWP8aFlpalpXGjJBJJ07NaXPI8p0Gk4I='),
+(4, 2, 1, 'Ana Admin Norte', 'admin@norte.com', 'pbkdf2_sha256$1000000$d4UZo1hiDlHsWRKAoa6xGs$p8IU4ad5WqrDWP8aFlpalpXGjJBJJ07NaXPI8p0Gk4I='),
+(5, 2, 2, 'Pedro Vigilante Norte', 'vigilante@norte.com', 'pbkdf2_sha256$1000000$d4UZo1hiDlHsWRKAoa6xGs$p8IU4ad5WqrDWP8aFlpalpXGjJBJJ07NaXPI8p0Gk4I='),
+(6, 3, 1, 'Rector Admin Uniguajira', 'admin@uniguajira.edu.co', 'pbkdf2_sha256$1000000$d4UZo1hiDlHsWRKAoa6xGs$p8IU4ad5WqrDWP8aFlpalpXGjJBJJ07NaXPI8p0Gk4I='),
+(7, 3, 2, 'Mario Vigilante Uniguajira', 'porteria@uniguajira.edu.co', 'pbkdf2_sha256$1000000$d4UZo1hiDlHsWRKAoa6xGs$p8IU4ad5WqrDWP8aFlpalpXGjJBJJ07NaXPI8p0Gk4I='),
+(8, 3, 3, 'Sofia Supervisora', 'supervision@uniguajira.edu.co', 'pbkdf2_sha256$1000000$d4UZo1hiDlHsWRKAoa6xGs$p8IU4ad5WqrDWP8aFlpalpXGjJBJJ07NaXPI8p0Gk4I='),
+(9, 4, 1, 'Juan Admin Logístico', 'admin@logistico.com', 'pbkdf2_sha256$1000000$d4UZo1hiDlHsWRKAoa6xGs$p8IU4ad5WqrDWP8aFlpalpXGjJBJJ07NaXPI8p0Gk4I='),
+(10, 4, 2, 'Diego Vigilante Logístico', 'porteria@logistico.com', 'pbkdf2_sha256$1000000$d4UZo1hiDlHsWRKAoa6xGs$p8IU4ad5WqrDWP8aFlpalpXGjJBJJ07NaXPI8p0Gk4I='),
+(11, 1, 4, 'admin', 'admin@heimdall.tech', 'pbkdf2_sha256$1000000$d4UZo1hiDlHsWRKAoa6xGs$p8IU4ad5WqrDWP8aFlpalpXGjJBJJ07NaXPI8p0Gk4I='),
+(12, 1, 4, 'rastor36', 'rastor36@heimdall.tech', 'pbkdf2_sha256$1000000$d4UZo1hiDlHsWRKAoa6xGs$p8IU4ad5WqrDWP8aFlpalpXGjJBJJ07NaXPI8p0Gk4I=');
+
+-- Cada usuario conserva su rol principal como primera asignación de la tabla puente.
+INSERT INTO USUARIO_HAS_ROL (id_usuario, id_rol) VALUES
+(1, 1), (2, 2), (3, 2), (4, 1), (5, 2), (6, 1),
+(7, 2), (8, 3), (9, 1), (10, 2), (11, 4), (12, 4);
 
 INSERT INTO RESPONSABLE (id_responsable, id_establecimiento, documento_identidad, nombre, telefono) VALUES
 (1, 1, '1001001', 'Maria Gomez', '3001112233'),

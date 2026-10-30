@@ -31,6 +31,7 @@ La mayoría de endpoints de negocio requieren un token JWT. Los endpoints multie
 - `GET /api/profile/` (rol, permisos efectivos, acciones y menú)
 - `GET /api/identidad/usuarios/?id_establecimiento=1`
 - `/api/identidad/roles/` (lectura/escritura según permisos; escritura solo Super Admin)
+- `/api/identidad/recursos/` (catálogo de módulos y acciones; escritura solo Super Admin)
 
 ### Empresas
 
@@ -64,6 +65,7 @@ npm run build
 ```powershell
 cd backend
 .\.venv\Scripts\python.exe manage.py check
+.\.venv\Scripts\python.exe bootstrap_db.py --check-schema
 ```
 
 Para probar el uso desde un teléfono, consulta [USO_MOVIL.md](USO_MOVIL.md). Para el entorno completo, vuelve al [README principal](README.md).

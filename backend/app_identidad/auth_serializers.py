@@ -5,6 +5,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from config.rbac import profile_role_ids
 from config.tenant_utils import SUPER_ADMIN_ROL_ID
 
 from .models import Usuario
@@ -27,7 +28,7 @@ def _ensure_django_user_from_usuario(usuario, password):
     """
 
     username = (usuario.correo or "").strip().lower()
-    is_staff = usuario.id_rol_id == SUPER_ADMIN_ROL_ID
+    is_staff = SUPER_ADMIN_ROL_ID in set(profile_role_ids(usuario))
     user = User.objects.filter(username=username).first()
     created = user is None
     if created:
@@ -91,11 +92,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             if perfil is None:
                 perfil = Usuario.objects.select_related(
                     "id_rol", "id_establecimiento", "id_establecimiento__id_plan"
-                ).filter(correo__iexact=user.email.lower()).first()
+                ).prefetch_related("roles_asignados__id_rol").filter(correo__iexact=user.email.lower()).first()
             if perfil:
                 token["id_establecimiento"] = perfil.id_establecimiento_id
                 token["rol"] = perfil.id_rol.nombre if perfil.id_rol else "Sin rol"
                 token["rol_id"] = perfil.id_rol_id if perfil.id_rol else None
+                token["roles_ids"] = profile_role_ids(perfil)
         except Exception:
             pass
 
@@ -108,12 +110,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         correo = LOGIN_ALIASES.get(key, key)
         usuario = Usuario.objects.select_related(
             "id_rol", "id_establecimiento", "id_establecimiento__id_plan"
-        ).filter(correo__iexact=correo).first()
+        ).prefetch_related("roles_asignados__id_rol").filter(correo__iexact=correo).first()
         if usuario is not None:
             return usuario
         return Usuario.objects.select_related(
             "id_rol", "id_establecimiento", "id_establecimiento__id_plan"
-        ).filter(nombre__iexact=username.strip()).first()
+        ).prefetch_related("roles_asignados__id_rol").filter(nombre__iexact=username.strip()).first()
 
     def validate(self, attrs):
         username = (attrs.get("username") or "").strip()
@@ -179,7 +181,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             try:
                 perfil = Usuario.objects.select_related(
                     "id_rol", "id_establecimiento", "id_establecimiento__id_plan"
-                ).filter(correo__iexact=user.email.lower()).first()
+                ).prefetch_related("roles_asignados__id_rol").filter(correo__iexact=user.email.lower()).first()
             except Exception:
                 perfil = None
 
@@ -199,6 +201,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 "menu",
                 "catalogo_permisos",
                 "roles",
+                "roles_asignados",
+                "roles_ids",
                 "funcionalidades",
             ):
                 if key in profile_payload:

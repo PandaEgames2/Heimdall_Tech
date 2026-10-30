@@ -3,7 +3,7 @@
 import json
 import os
 
-from django.contrib.auth.hashers import identify_hasher, make_password
+from django.contrib.auth.hashers import check_password, identify_hasher, make_password
 from django.core.management.base import BaseCommand
 from django.db import connection
 
@@ -100,9 +100,16 @@ class Command(BaseCommand):
                 row = cursor.fetchone()
                 if row:
                     existing_hash = str(row[1] or "")
-                    # Repara hashes inválidos o vacíos. Con --reset-passwords
-                    # también migra los válidos al hasher preferido.
-                    if options["reset_passwords"] or not _is_valid_password_hash(existing_hash):
+                    # Repara hashes inválidos, vacíos o que no correspondan a la
+                    # contraseña demo. Con --reset-passwords también migra los
+                    # válidos al hasher preferido.
+                    password_ok = False
+                    if existing_hash and _is_valid_password_hash(existing_hash):
+                        try:
+                            password_ok = bool(check_password(demo_password, existing_hash))
+                        except Exception:
+                            password_ok = False
+                    if options["reset_passwords"] or not password_ok:
                         cursor.execute(
                             "UPDATE USUARIO SET password_hash = %s WHERE id_usuario = %s",
                             [password_hash, row[0]],
@@ -132,8 +139,33 @@ class Command(BaseCommand):
                 """
             )
 
+            # Cada cuenta demo conserva al menos su rol principal en la tabla puente.
+            cursor.execute(
+                """
+                SELECT COUNT(*) FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'USUARIO_HAS_ROL'
+                """,
+                [connection.settings_dict["NAME"]],
+            )
+            if cursor.fetchone()[0] > 0:
+                cursor.execute(
+                    """
+                    INSERT IGNORE INTO USUARIO_HAS_ROL (id_usuario, id_rol)
+                    SELECT u.id_usuario, u.id_rol
+                    FROM USUARIO u
+                    WHERE u.correo IN (
+                        'admin@heimdall.tech', 'rastor36@heimdall.tech',
+                        'admin@pinos.com', 'vigilante@pinos.com', 'vigilante2@pinos.com',
+                        'residente@pinos.com', 'admin@norte.com', 'vigilante@norte.com',
+                        'admin@uniguajira.edu.co', 'porteria@uniguajira.edu.co',
+                        'supervision@uniguajira.edu.co', 'admin@logistico.com',
+                        'porteria@logistico.com'
+                    )
+                    """
+                )
+
         self.stdout.write(self.style.SUCCESS(
-            "Cuentas demo verificadas con contraseñas hasheadas."
+            "Cuentas demo verificadas: contraseña y roles de la tabla puente comprobados."
         ))
         if options.get("show_credentials"):
             self.stdout.write("\n".join(

@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import Sidebar from './components/Sidebar';
 import LandingPage from './features/landing/LandingPage';
 import RoleManagement from './features/rbac/RoleManagement';
+import ResourceManagement from './features/rbac/ResourceManagement';
 import UserManagement from './features/rbac/UserManagement';
 import { apiFetch, apiRequest as authFetch, loginRequest, logoutRequest, refreshSession } from './lib/api';
 import { navigate, usePathname } from './lib/router';
@@ -968,6 +969,13 @@ function App() {
     />
   );
 
+  const renderRecursos = () => (
+    <ResourceManagement
+      isSuperAdmin={isPlatformSuperAdmin}
+      onResourcesChanged={refreshProfile}
+    />
+  );
+
   const renderCatalogos = () => {
     const catalogItems = [
       { key: 'planes', label: isPlatformSuperAdmin ? 'Planes' : 'Mi plan', value: catalogData.planesCount, records: catalogData.planes, icon: 'P', tone: 'green' },
@@ -1305,6 +1313,7 @@ function App() {
     dashboard: renderDashboard(),
     usuarios: canAccess('usuarios') ? renderUsers() : <div className="panel-card warn">No tienes permisos para ver usuarios.</div>,
     roles: canAccess('roles') ? renderRoles() : <div className="panel-card warn">No tienes permisos para ver roles.</div>,
+    recursos: isPlatformSuperAdmin && canAccess('recursos') ? renderRecursos() : <div className="panel-card warn">La administración de recursos es exclusiva del Super Admin.</div>,
     catalogos: canAccess('catalogos') ? renderCatalogos() : <div className="panel-card warn">No tienes permisos para ver catálogo.</div>,
     camaras: canAccess('camaras') ? renderCamaras() : <div className="panel-card warn">No tienes permisos para ver cámaras.</div>,
     accesos: canAccess('accesos') ? renderAccesos() : <div className="panel-card warn">No tienes permisos para registrar accesos.</div>,

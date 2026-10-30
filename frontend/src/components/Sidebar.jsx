@@ -7,6 +7,7 @@ const FALLBACK_MENU = [
   { key: 'mi_qr', label: 'Mi QR e invitados', group: 'Operación' },
   { key: 'usuarios', label: 'Usuarios', group: 'Administración' },
   { key: 'roles', label: 'Roles y permisos', group: 'Administración' },
+  { key: 'recursos', label: 'Recursos', group: 'Administración' },
   { key: 'catalogos', label: 'Catálogo', group: 'Administración' },
   { key: 'reportes', label: 'Reportes', group: 'Administración' },
   { key: 'seguridad', label: 'Seguridad', group: 'Sistema' },

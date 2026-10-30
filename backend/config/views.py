@@ -55,6 +55,7 @@ class ApiIndexView(APIView):
                     },
                     "identidad": {
                         "roles": "/api/identidad/roles/",
+                        "recursos": "/api/identidad/recursos/",
                         "usuarios": "/api/identidad/usuarios/?id_establecimiento={id}",
                         "login": "/api/identidad/auth/login/",
                         "refresh": "/api/identidad/auth/refresh/",

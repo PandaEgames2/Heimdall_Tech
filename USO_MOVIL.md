@@ -1,6 +1,6 @@
 # Heimdall Tech — uso en celular (PWA portable)
 
-No hay app nativa en Play Store todavía. La **versión móvil** es la misma web React, optimizada para abrirse desde el navegador del teléfono en la red local (PWA ligera).
+No hay app nativa en Play Store todavía. La **versión móvil** es la misma web React, optimizada para abrirse desde el navegador del teléfono en la red local (PWA ligera). Por ahora se distribuye solo como PWA; no se incluye APK.
 
 ## Requisitos
 
@@ -54,7 +54,7 @@ La barra lateral se construye con el menú que entrega `/api/profile/`. Si un pe
 - Usuario: `admin` o `admin@heimdall.tech`
 - Contraseña: `Heimdall#2026`
 
-El Super Admin administra los roles globales y las excepciones de permisos desde **Roles y permisos** y **Usuarios**. Los demás roles no ven esas opciones. Las contraseñas demo solo se imprimen si ejecutas `iniciar.ps1` con `$env:HEIMDALL_SHOW_DEMO_CREDENTIALS=1`.
+El Super Admin administra los roles globales, el catálogo de recursos y las excepciones de permisos desde **Roles y permisos**, **Recursos** y **Usuarios**. Los demás roles no ven esas opciones. Las tablas y los formularios se adaptan al ancho del teléfono; las asignaciones y confirmaciones se abren en modales centrados con overlay oscuro. Las contraseñas demo solo se imprimen si ejecutas `iniciar.ps1` con `$env:HEIMDALL_SHOW_DEMO_CREDENTIALS=1`.
 
 ## Problemas frecuentes
 
