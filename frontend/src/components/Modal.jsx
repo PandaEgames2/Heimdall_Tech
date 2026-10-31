@@ -19,6 +19,7 @@ export default function Modal({
   children,
   footer,
   size = 'md',
+  theme = 'light',
   closeLabel = 'Cerrar ventana',
 }) {
   const panelRef = useRef(null);
@@ -90,7 +91,7 @@ export default function Modal({
     >
       <section
         ref={panelRef}
-        className={`rbac-modal rbac-modal-${size}`}
+        className={`rbac-modal rbac-modal-${size} ${theme === 'dark' ? 'rbac-modal-dark' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

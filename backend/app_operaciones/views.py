@@ -17,6 +17,7 @@ from app_empresas.features import features_for_establecimiento
 from app_identidad.models import Usuario
 from config.permissions import IsResident, IsTenantAdmin, IsTenantStaff, IsTenantStaffOrResident
 from config.tenant_utils import (
+    ADMIN_ROL_IDS,
     RESIDENTE_ROL_ID,
     get_usuario_perfil,
     is_platform_superadmin,
@@ -334,21 +335,101 @@ class InvitacionVisitanteViewSet(EstablecimientoQueryParamMixin, viewsets.ModelV
     def get_queryset(self):
         queryset = super().get_queryset()
         profile = get_usuario_perfil(self.request.user)
-        if profile and profile_has_role(profile, RESIDENTE_ROL_ID):
+        is_staff_member = bool(
+            profile
+            and (
+                profile.id_rol_id in ADMIN_ROL_IDS
+                or profile_has_role(profile, 1)
+                or profile_has_role(profile, 4)
+            )
+        )
+        if profile and profile_has_role(profile, RESIDENTE_ROL_ID) and not is_staff_member:
             queryset = queryset.filter(id_residente_id=profile.id_usuario)
         return queryset
 
+    def _residente_anfitrion(self, request, profile, establecimiento_id):
+        """Resuelve quién figura como anfitrión de la invitación.
+
+        Un residente/empleado sólo puede invitar a su propio nombre. La
+        administración puede elegir un residente activo del mismo
+        establecimiento, incluso en contextos estrictos donde la bandera de
+        invitaciones de residentes está apagada.
+        """
+
+        is_admin = bool(
+            profile
+            and (
+                profile.id_rol_id in ADMIN_ROL_IDS
+                or profile_has_role(profile, 1)
+                or profile_has_role(profile, 4)
+            )
+        )
+        is_resident = bool(profile and profile_has_role(profile, RESIDENTE_ROL_ID))
+
+        if is_admin:
+            resident_id = request.data.get("id_residente")
+            if not resident_id:
+                raise ValidationError(
+                    {"id_residente": "Selecciona el residente o empleado anfitrión."}
+                )
+            resident = Usuario.objects.filter(
+                pk=resident_id,
+                id_establecimiento_id=establecimiento_id,
+                estado=True,
+            ).first()
+            if not resident or not profile_has_role(resident, RESIDENTE_ROL_ID):
+                raise ValidationError(
+                    {
+                        "id_residente": (
+                            "El anfitrión debe ser un residente/empleado activo "
+                            "del mismo establecimiento."
+                        )
+                    }
+                )
+            return resident
+
+        if not is_resident:
+            raise PermissionDenied(
+                "Las invitaciones QR las crea un residente o la administración "
+                "del establecimiento."
+            )
+
+        establecimiento = profile.id_establecimiento
+        if not establecimiento or establecimiento.id_establecimiento != establecimiento_id:
+            raise PermissionDenied("Solo puedes invitar dentro de tu establecimiento.")
+        if not establecimiento.permite_invitaciones_residente:
+            raise PermissionDenied(
+                "La administración de este establecimiento no ha habilitado "
+                "invitaciones para residentes/empleados. Solicita autorización "
+                "a un administrador."
+            )
+        return profile
+
     def create(self, request, *args, **kwargs):
         profile = get_usuario_perfil(request.user)
-        if not profile or not profile_has_role(profile, RESIDENTE_ROL_ID):
-            raise PermissionDenied("Las invitaciones QR las crea el residente anfitrión.")
-        _require_qr_feature(profile.id_establecimiento)
+        if not profile:
+            raise PermissionDenied("No se pudo resolver el perfil autenticado.")
+
+        establecimiento_id = self.get_establecimiento_id()
+        establecimiento = Establecimiento.objects.select_related("id_plan").filter(
+            pk=establecimiento_id
+        ).first()
+        if not establecimiento:
+            raise ValidationError(
+                {"id_establecimiento": "El establecimiento no existe."}
+            )
+        _require_qr_feature(establecimiento)
+
+        residente = self._residente_anfitrion(
+            request, profile, establecimiento_id
+        )
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         raw_token = secrets.token_urlsafe(32)
         invitation = serializer.save(
-            id_establecimiento=profile.id_establecimiento,
-            id_residente=profile,
+            id_establecimiento=establecimiento,
+            id_residente=residente,
             token_hash=hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
         )
         response_data = self.get_serializer(invitation).data

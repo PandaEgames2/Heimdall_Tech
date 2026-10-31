@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar';
 import Modal from './components/Modal';
 import LandingPage from './features/landing/LandingPage';
 import EstablishmentModal from './features/empresas/EstablishmentModal';
+import AdminInvitationModal from './features/empresas/AdminInvitationModal';
 import RoleManagement from './features/rbac/RoleManagement';
 import ResourceManagement from './features/rbac/ResourceManagement';
 import UserManagement from './features/rbac/UserManagement';
@@ -193,6 +194,114 @@ const planFeatures = (plan) => {
   };
 };
 
+const SECURITY_FEATURES = [
+  {
+    key: 'rbac',
+    tag: 'Autorización',
+    title: 'RBAC de cinco tablas',
+    summary: 'Roles, recursos, multirrol y excepciones individuales resueltos en el backend.',
+    intro: 'Heimdall no confía en el menú del navegador: cada petición vuelve a resolver los permisos efectivos del usuario en Django antes de leer o escribir.',
+    points: [
+      'USUARIO, ROL, RECURSO, USUARIO_HAS_ROL y ROL_HAS_RECURSO forman el modelo RBAC. Las tablas puente permiten varios roles por usuario y varios recursos por rol.',
+      'Los cinco roles base (Super Admin, Administrador, Supervisor, Vigilante y Residente) están protegidos. Los roles personalizados nacen con Dashboard para no quedar inaccesibles.',
+      'resolve_effective_permissions une los recursos de todos los roles y aplica permisos_excepciones. solo_lectura prevalece sobre puede_editar y puede_eliminar.',
+      'config.permissions valida cada ViewSet. El menú y los botones del frontend son sólo una representación del contrato que ya aplica la API.',
+    ],
+    files: ['backend/config/rbac.py', 'backend/config/permissions.py', 'backend/app_identidad/profile_service.py'],
+    snippet: 'resolve_effective_permissions(perfil, is_superadmin=...)\n→ { permisos, puede_editar, puede_eliminar, solo_lectura }',
+  },
+  {
+    key: 'jwt',
+    tag: 'Sesiones',
+    title: 'JWT con tenant y rol',
+    summary: 'Access token corto en memoria y refresh rotativo en cookie HttpOnly.',
+    intro: 'El login valida la contraseña contra USUARIO y emite tokens de SimpleJWT enriquecidos con establecimiento, rol principal y lista de roles.',
+    points: [
+      'El access token vive 15 minutos y se conserva únicamente en memoria. El refresh vive 7 días en una cookie HttpOnly, SameSite=Strict y con Secure activo fuera de DEBUG.',
+      'Cada refresh rota el token y el anterior entra en la lista negra. Logout revoca el refresh y borra la cookie; el frontend renueva la sesión al recargar.',
+      'El token incorpora id_establecimiento, rol, rol_id y roles_ids. El backend contrasta esos datos con USUARIO y no acepta un tenant enviado libremente por el cliente.',
+      'Las contraseñas usan scrypt con parallelism=1; PBKDF2 y hashes antiguos se rehashean en el primer login exitoso.',
+    ],
+    files: ['backend/app_identidad/auth_views.py', 'backend/app_identidad/auth_serializers.py', 'backend/config/settings.py'],
+    snippet: 'SIMPLE_JWT = {\n  ACCESS_TOKEN_LIFETIME: 15 min,\n  REFRESH_TOKEN_LIFETIME: 7 días,\n  ROTATE_REFRESH_TOKENS: True,\n  BLACKLIST_AFTER_ROTATION: True,\n}',
+  },
+  {
+    key: 'multitenant',
+    tag: 'Aislamiento',
+    title: 'Multi-tenant por establecimiento',
+    summary: 'Cada consulta operativa se filtra por el establecimiento del perfil autenticado.',
+    intro: 'Un mismo backend atiende varios conjuntos, oficinas y empresas. El establecimiento es la frontera de datos, no un simple filtro visual.',
+    points: [
+      'Las tablas operativas guardan id_establecimiento. EstablecimientoQueryParamMixin exige el parámetro en la URL y llama a assert_establecimiento_access antes de listar o mutar.',
+      'El perfil se obtiene desde el correo autenticado; el usuario no puede elegir otro tenant en el body. El Super Admin es la única cuenta con lectura global.',
+      'Los serializers y las vistas vuelven a comprobar la pertenencia del objeto. Un identificador válido de otro establecimiento devuelve vacío o 403, nunca datos ajenos.',
+      'El frontend reconstruye el menú y las consultas con id_establecimiento del perfil, pero la autorización real permanece en la API.',
+    ],
+    files: ['backend/config/mixins.py', 'backend/config/tenant_utils.py', 'backend/app_operaciones/views.py'],
+    snippet: 'qs = super().get_queryset()\nqs = qs.filter(id_establecimiento_id=est_id)\nassert_establecimiento_access(request, est_id)',
+  },
+  {
+    key: 'audit',
+    tag: 'Auditoría',
+    title: 'Logs operativos y trazabilidad',
+    summary: 'Movimientos, incidencias y reconocimientos conservan actor, vehículo, invitación y tiempo.',
+    intro: 'La operación de portería deja un rastro consultable para reportes, incidencias y revisiones del supervisor.',
+    points: [
+      'MOVIMIENTO registra establecimiento, vehículo, usuario operador, placa leída, tipo, dispositivo, observación, estado de sincronización y fechas.',
+      'INCIDENCIA puede vincular vehículo, usuario e invitación. RECONOCIMIENTO_PLACA conserva la placa detectada, confianza, resultado IA y fotografía.',
+      'Las vistas de Reportes consultan esos registros con paginación y aislamiento por establecimiento. El detalle se abre en un modal con los campos normalizados.',
+      'La bitácora es operativa, no un almacén inmutable tipo SIEM. Para producción se recomienda exportar a un repositorio append-only y definir retención.',
+    ],
+    files: ['backend/app_operaciones/models.py', 'backend/app_operaciones/views.py', 'frontend/src/App.jsx'],
+    snippet: 'Movimiento.objects.create(\n  id_establecimiento=..., id_usuario=...,\n  tipo_movimiento=..., fecha_evento=now,\n  estado_sincronizacion="SINCRONIZADO",\n)',
+  },
+  {
+    key: 'quota',
+    tag: 'Comercial',
+    title: 'Cupos y facturación por plan',
+    summary: 'Capacidad base de residentes/empleados, cobro por excedente o bloqueo con upgrade.',
+    intro: 'Cada plan define cuántas plazas de residentes/empleados incluye y qué ocurre cuando el establecimiento las supera.',
+    points: [
+      'PLAN incorpora cupo_residentes, precio_excedente y politica_excedente. La capacidad se cuenta por establecimiento y sólo consume plaza un residente activo.',
+      'Con política COBRO el registro continúa y el perfil expone el excedente y el valor extra mensual. Con política BLOQUEO la API rechaza la nueva plaza con un mensaje de upgrade.',
+      'La validación vive en UsuarioSerializer y en app_empresas/quotas.py. El frontend muestra el consumo y el cobro, pero no puede saltarse la regla.',
+      'El catálogo de planes y establecimientos expone cupo base, ocupados, disponibles, excedente y total estimado para administración.',
+    ],
+    files: ['backend/app_empresas/quotas.py', 'backend/app_empresas/serializers.py', 'backend/app_identidad/serializers.py'],
+    snippet: 'estado = estado_cupo(establecimiento)\nif estado["excedente"] and politica == "BLOQUEO":\n    raise CupoResidenteExcedido(...)',
+  },
+  {
+    key: 'invitations',
+    tag: 'RBAC contextual',
+    title: 'Invitaciones restringidas por contexto',
+    summary: 'Conjunto residencial permite invitados; gobierno y alta seguridad requieren autorización.',
+    intro: 'El tipo de establecimiento cambia el comportamiento del rol Residente/Empleado sin duplicar roles ni crear permisos ad hoc.',
+    points: [
+      'ESTABLECIMIENTO guarda tipo_entidad y permite_invitaciones_residente. Los tipos disponibles son Conjunto residencial, Oficina de gobierno y Empresa de alta seguridad.',
+      'Al crear o convertir un establecimiento a un tipo estricto, la capacidad nace deshabilitada. El Super Admin puede habilitarla de forma explícita desde el formulario de establecimiento.',
+      'El backend comprueba la bandera en InvitacionVisitanteViewSet.create y rechaza la generación con 403. El frontend oculta el formulario y explica que la administración debe autorizarlo.',
+      'La restricción es contextual: no elimina el rol Residente ni su QR personal; sólo limita la creación de códigos de invitados.',
+    ],
+    files: ['backend/app_empresas/models.py', 'backend/app_operaciones/views.py', 'frontend/src/features/empresas/EstablishmentModal.jsx'],
+    snippet: 'if not establecimiento.permite_invitaciones_residente:\n    raise PermissionDenied(\n      "La administración no ha habilitado invitaciones"\n    )',
+  },
+  {
+    key: 'offline',
+    tag: 'Continuidad',
+    title: 'Interfaz tolerante a cortes',
+    summary: 'La sesión puede abrir sin red, pero la sincronización offline aún es parcial.',
+    intro: 'La UI conserva la sesión y avisa del estado de conexión. No se promete una cola de escritura offline que todavía no existe.',
+    points: [
+      'El frontend escucha online/offline y muestra un indicador de modo sin conexión. La sesión se restaura desde localStorage y se renueva con la cookie al volver la red.',
+      'Las pantallas ya cargadas permanecen visibles, pero las operaciones que requieren API fallan con un mensaje controlado. No hay almacenamiento IndexedDB de movimientos pendientes.',
+      'MOVIMIENTO admite estado_sincronizacion PENDIENTE/SINCRONIZADO para el modelo de datos, pero la cola de reintento automática es una evolución pendiente.',
+      'Para portería crítica se recomienda una cola local explícita, resolución de conflictos y confirmación de idempotencia antes de prometer operación offline completa.',
+    ],
+    files: ['frontend/src/App.jsx', 'frontend/src/lib/api.js', 'backend/app_operaciones/models.py'],
+    snippet: 'const [offlineMode, setOfflineMode] = useState(!navigator.onLine)\n// La UI avisa; las escrituras siguen requiriendo API.',
+  },
+];
+
 const detailFieldLabels = {
   id_establecimiento: 'Establecimiento', id_vehiculo: 'Vehículo', id_usuario: 'Usuario',
   id_movimiento: 'Movimiento', id_dispositivo: 'Dispositivo', placa_leida: 'Placa leída',
@@ -221,7 +330,9 @@ function App() {
   const [activeCatalog, setActiveCatalog] = useState('planes');
   const [activeReport, setActiveReport] = useState('movimientos');
   const [selectedDetail, setSelectedDetail] = useState(null);
+  const [securityFeature, setSecurityFeature] = useState(null);
   const [establishmentModal, setEstablishmentModal] = useState(null);
+  const [adminInviteOpen, setAdminInviteOpen] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [movementForm, setMovementForm] = useState({ placa_leida: '', id_vehiculo: '', codigo_rfid: '', tipo_movimiento: 'INGRESO', observacion: '' });
   const [movementSaved, setMovementSaved] = useState('');
@@ -257,9 +368,18 @@ function App() {
   });
 
   const isPlatformSuperAdmin = Boolean(session.user?.is_platform_superadmin);
+  const roleIds = (session.user?.roles_ids || []).map(Number);
   const isResident = session.user?.rol === 'Residente'
     || Number(session.user?.rol_id) === 5
-    || (session.user?.roles_ids || []).some((roleId) => Number(roleId) === 5);
+    || roleIds.includes(5);
+  const isTenantAdmin = isPlatformSuperAdmin
+    || Number(session.user?.rol_id) === 1
+    || roleIds.includes(1);
+  const canInviteVisitors = session.user?.puede_invitar !== false;
+  const quota = session.user?.cupo || null;
+  const activeSecurityFeature = SECURITY_FEATURES.find(
+    (feature) => feature.key === securityFeature,
+  ) || null;
   const effectivePermissions = useMemo(
     () => (Array.isArray(session.user?.permisos_efectivos) ? session.user.permisos_efectivos : []),
     [session.user?.permisos_efectivos],
@@ -801,6 +921,9 @@ function App() {
 
   const handleCreateVisitorInvitation = async (event) => {
     event.preventDefault();
+    if (session.user?.puede_invitar === false) {
+      return setError('La administración de este establecimiento no ha habilitado invitaciones para residentes.');
+    }
     const establishmentId = session.user?.id_establecimiento;
     if (!establishmentId) return setError('La cuenta no tiene un establecimiento asociado.');
     try {
@@ -918,14 +1041,18 @@ function App() {
         : ['Fecha', 'Placa detectada', 'Confianza', 'Resultado'];
 
     return (
-      <div className="table-scroll">
-        <table className="data-table detail-table">
+      <div className="rbac-table-wrap">
+        <table className="rbac-table detail-table">
           <thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}<th>Consulta</th></tr></thead>
           <tbody>
             {rows.map((row, index) => (
               <tr key={row.key ?? `${type}-${index}`}>
                 {row.cells.map((cell, cellIndex) => <td key={`${row.key}-${cellIndex}`}>{cell || '—'}</td>)}
-                <td><button className="ghost-btn" onClick={() => handleOpenDetail(type, records[index])}>Ver detalle</button></td>
+                <td>
+                  <button type="button" className="rbac-btn rbac-btn-ghost rbac-btn-small" onClick={() => handleOpenDetail(type, records[index])}>
+                    Ver detalle
+                  </button>
+                </td>
               </tr>
             ))}
             {!rows.length ? <tr><td colSpan={columns.length + 1}>No hay registros para mostrar.</td></tr> : null}
@@ -1017,21 +1144,42 @@ function App() {
       { key: 'incidencias', label: 'Incidencias', value: totalIncidencias, records: reportData.incidencias, icon: 'I', tone: 'red' },
     ];
     const selected = catalogItems.find((item) => item.key === activeCatalog) || catalogItems[0];
+    const quotaMessage = quota
+      ? quota.excedente > 0
+        ? (quota.politica_excedente === 'BLOQUEO'
+          ? `Cupo superado. El plan bloquea nuevas plazas hasta contratar un upgrade.`
+          : `Cupo superado: el excedente suma $ ${Number(quota.cobro_extra).toLocaleString('es-CO', { minimumFractionDigits: 2 })} a la factura mensual.`)
+        : (quota.politica_excedente === 'BLOQUEO'
+          ? `Quedan ${quota.disponibles} plazas antes de que el plan bloquee nuevos registros.`
+          : `Quedan ${quota.disponibles} plazas incluidas antes de aplicar cobro por excedente.`)
+      : '';
     const catalogColumns = {
-      planes: ['Plan', 'Descripción', 'Precio', 'Usuarios incluidos', 'Manual', 'QR', 'RFID', 'LPR / IA'],
-      establecimientos: ['Establecimiento', 'Plan', 'Dirección', 'Teléfono', 'Estado'],
+      planes: ['Plan', 'Descripción', 'Precio base', 'Cupo residentes', 'Excedente / mes', 'Política', 'Usuarios', 'QR', 'RFID', 'LPR / IA'],
+      establecimientos: ['Establecimiento', 'Plan', 'Tipo', 'Invitaciones', 'Dirección', 'Teléfono', 'Estado'],
       vehiculos: ['Placa', 'Marca y modelo', 'Color', 'RFID', 'Autorización', 'Responsable'],
       incidencias: ['Fecha', 'Título', 'Prioridad', 'Vehículo'],
     };
     const cellsFor = (record) => {
       if (activeCatalog === 'planes') {
         const features = planFeatures(record);
-        return [record.nombre, record.descripcion, `$ ${Number(record.precio).toLocaleString('es-CO')}`, record.limite_usuarios,
-          features.manual ? 'Sí' : 'No', features.qr ? 'Sí' : 'No', features.rfid ? 'Sí' : 'No', features.lpr ? 'Sí' : 'No'];
+        return [
+          record.nombre,
+          record.descripcion,
+          `$ ${Number(record.precio).toLocaleString('es-CO')}`,
+          record.cupo_residentes,
+          `$ ${Number(record.precio_excedente || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`,
+          record.politica_excedente_etiqueta || record.politica_excedente || '—',
+          record.limite_usuarios,
+          features.qr ? 'Sí' : 'No',
+          features.rfid ? 'Sí' : 'No',
+          features.lpr ? 'Sí' : 'No',
+        ];
       }
       if (activeCatalog === 'establecimientos') return [
         record.nombre,
         record.plan?.nombre || '—',
+        record.tipo_entidad_etiqueta || '—',
+        record.permite_invitaciones_residente ? 'Residentes habilitados' : 'Sólo administración',
         record.direccion,
         record.telefono || '—',
         record.estado ? 'Activo' : 'Inactivo',
@@ -1053,19 +1201,51 @@ function App() {
     };
 
     return (
-      <div className="catalog-panel">
-        <div className="section-header">
-          <h3>Catálogo y gestión</h3>
-          {activeCatalog === 'establecimientos' && isPlatformSuperAdmin ? (
-            <button className="primary-btn" onClick={() => setEstablishmentModal({ establishment: null })}>
-              + Nuevo establecimiento
-            </button>
-          ) : activeCatalog === 'vehiculos' && canAccess('usuarios') ? (
-            <button className="primary-btn" onClick={() => setVehicleFormOpen(true)}>
-              + Registrar vehículo
-            </button>
-          ) : null}
-        </div>
+      <div className="rbac-card rbac-card-dark catalog-panel">
+        <header className="rbac-card-header">
+          <div>
+            <span className="rbac-eyebrow">Catálogo · Inventario del establecimiento</span>
+            <h3>Catálogo y gestión</h3>
+            <p>
+              Planes, establecimientos, vehículos e incidencias en una sola vista.
+              Los cupos y el tipo de entidad se validan en el backend antes de
+              permitir un alta o una invitación.
+            </p>
+          </div>
+          <div className="rbac-header-actions">
+            <span className="rbac-badge rbac-badge-gold">Tablillas rúnicas</span>
+            {isTenantAdmin && hasFeature('qr') && session.user?.id_establecimiento ? (
+              <button type="button" className="rbac-btn rbac-btn-ghost" onClick={() => setAdminInviteOpen(true)}>
+                Invitar visitante
+              </button>
+            ) : null}
+            {activeCatalog === 'establecimientos' && isPlatformSuperAdmin ? (
+              <button type="button" className="rbac-btn rbac-btn-gold" onClick={() => setEstablishmentModal({ establishment: null })}>
+                + Nuevo establecimiento
+              </button>
+            ) : activeCatalog === 'vehiculos' && canAccess('usuarios') ? (
+              <button type="button" className="rbac-btn rbac-btn-gold" onClick={() => setVehicleFormOpen(true)}>
+                + Registrar vehículo
+              </button>
+            ) : null}
+          </div>
+        </header>
+        {quota ? (
+          <div className={`quota-banner ${quota.excedente > 0 ? 'is-over' : ''} ${quota.politica_excedente === 'BLOQUEO' ? 'is-blocking' : ''}`}>
+            <div className="quota-banner-copy">
+              <span className="eyebrow">Cupo del plan {quota.plan_nombre || ''}</span>
+              <strong>{quota.ocupados} de {quota.cupo_base} residentes/empleados</strong>
+              <small>{quotaMessage}</small>
+            </div>
+            <div className="quota-banner-numbers">
+              <span><b>{quota.disponibles}</b> disponibles</span>
+              <span><b>{quota.excedente}</b> excedente</span>
+              <span><b>$ {Number(quota.cobro_extra || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</b> cobro extra</span>
+              <span><b>$ {Number(quota.total_mensual || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</b> total estimado</span>
+            </div>
+            <div className="quota-meter" aria-hidden="true"><span style={{ width: `${quota.porcentaje_uso || 0}%` }} /></div>
+          </div>
+        ) : null}
         <div className="catalog-grid">
           {catalogItems.map((item) => (
             <button key={item.key} className={`catalog-card ${item.tone} ${activeCatalog === item.key ? 'selected' : ''}`} onClick={() => setActiveCatalog(item.key)}>
@@ -1082,8 +1262,8 @@ function App() {
               <small>{selected.value} registros disponibles</small>
             </div>
           </div>
-          <div className="table-scroll">
-            <table className="data-table detail-table">
+          <div className="rbac-table-wrap">
+            <table className="rbac-table detail-table">
               <thead><tr>{catalogColumns[activeCatalog].map((column) => <th key={column}>{column}</th>)}<th>Consulta</th></tr></thead>
               <tbody>
                 {selected.records.map((record, index) => {
@@ -1092,10 +1272,10 @@ function App() {
                   <tr key={`${activeCatalog}-${recordId}`}>
                     {cellsFor(record).map((cell, cellIndex) => <td key={cellIndex}>{cell || '—'}</td>)}
                     <td>
-                      <div className="catalog-row-actions">
-                        <button className="ghost-btn" onClick={() => handleOpenDetail(activeCatalog, record)}>Ver detalle</button>
+                      <div className="rbac-row-actions catalog-row-actions">
+                        <button type="button" className="rbac-btn rbac-btn-ghost rbac-btn-small" onClick={() => handleOpenDetail(activeCatalog, record)}>Ver detalle</button>
                         {activeCatalog === 'establecimientos' && isPlatformSuperAdmin ? (
-                          <button className="ghost-btn" onClick={() => setEstablishmentModal({ establishment: record })}>
+                          <button type="button" className="rbac-btn rbac-btn-gold rbac-btn-small" onClick={() => setEstablishmentModal({ establishment: record })}>
                             Editar
                           </button>
                         ) : null}
@@ -1110,7 +1290,7 @@ function App() {
           </div>
         </div>
         {activeCatalog === 'incidencias' && selected.records.length < totalIncidencias ? (
-          <button className="ghost-btn load-more" onClick={() => handleLoadMoreReport('incidencias')} disabled={loadingMore}>
+          <button type="button" className="rbac-btn rbac-btn-ghost load-more" onClick={() => handleLoadMoreReport('incidencias')} disabled={loadingMore}>
             {loadingMore ? 'Cargando…' : 'Cargar más incidencias'}
           </button>
         ) : null}
@@ -1258,19 +1438,40 @@ function App() {
         </div>
 
         <div className="panel-card">
-          <div className="section-header"><div><h3>Invitar visitante</h3><small>El registro queda asociado a tu cuenta como residente anfitrión.</small></div></div>
-          <form className="form-panel" onSubmit={handleCreateVisitorInvitation}>
-            <div className="field-grid">
-              <label><span>Nombre del visitante</span><input value={visitorForm.nombre_visitante} onChange={(e) => setVisitorForm((p) => ({ ...p, nombre_visitante: e.target.value }))} required maxLength="100" /></label>
-              <label><span>Documento (opcional)</span><input value={visitorForm.documento_visitante} onChange={(e) => setVisitorForm((p) => ({ ...p, documento_visitante: e.target.value }))} maxLength="30" /></label>
-              <label><span>Placa (opcional)</span><input value={visitorForm.placa_visitante} onChange={(e) => setVisitorForm((p) => ({ ...p, placa_visitante: e.target.value.toUpperCase() }))} maxLength="15" /></label>
-              <label><span>Motivo de visita</span><input value={visitorForm.motivo} onChange={(e) => setVisitorForm((p) => ({ ...p, motivo: e.target.value }))} maxLength="255" /></label>
-              <label><span>Válido desde</span><input type="datetime-local" value={visitorForm.vigente_desde} onChange={(e) => setVisitorForm((p) => ({ ...p, vigente_desde: e.target.value }))} required /></label>
-              <label><span>Válido hasta (máximo 24 horas)</span><input type="datetime-local" value={visitorForm.vigente_hasta} onChange={(e) => setVisitorForm((p) => ({ ...p, vigente_hasta: e.target.value }))} required /></label>
+          <div className="section-header">
+            <div>
+              <h3>Invitar visitante</h3>
+              <small>
+                {canInviteVisitors
+                  ? 'El registro queda asociado a tu cuenta como residente anfitrión.'
+                  : 'La administración controla esta capacidad según el tipo de establecimiento.'}
+              </small>
             </div>
-            <div className="form-actions"><button className="primary-btn" type="submit" disabled={!qrEnabled}>Generar invitación QR</button></div>
-          </form>
-          {visitorQr?.qr_token ? <div className="qr-display"><QRCodeSVG value={visitorQr.qr_token} size={220} level="M" includeMargin /><p>Invitación para {visitorQr.nombre_visitante}</p><small>Anfitrión responsable: {session.user?.nombre} · Válida hasta {formatDateTime(visitorQr.vigente_hasta)}</small><details className="manual-qr-code"><summary>Mostrar código de respaldo para portería</summary><p>El vigilante puede pegar o escribir este código en la validación manual.</p><textarea aria-label="Código de respaldo de la invitación" readOnly rows="4" value={visitorQr.qr_token} onFocus={(event) => event.target.select()} /></details></div> : null}
+            <span className="status-pill">{session.user?.tipo_entidad_etiqueta || 'Establecimiento'}</span>
+          </div>
+          {!canInviteVisitors ? (
+            <div className="invite-lock-note" role="status">
+              <strong>Invitaciones restringidas</strong>
+              <p>
+                Este establecimiento es de tipo {session.user?.tipo_entidad_etiqueta || 'estricto'} y la
+                administración no ha habilitado que residentes o empleados generen códigos de invitados.
+                Solicita la autorización a un administrador; tu QR personal de residente sigue activo.
+              </p>
+            </div>
+          ) : (
+            <form className="form-panel" onSubmit={handleCreateVisitorInvitation}>
+              <div className="field-grid">
+                <label><span>Nombre del visitante</span><input value={visitorForm.nombre_visitante} onChange={(e) => setVisitorForm((p) => ({ ...p, nombre_visitante: e.target.value }))} required maxLength="100" /></label>
+                <label><span>Documento (opcional)</span><input value={visitorForm.documento_visitante} onChange={(e) => setVisitorForm((p) => ({ ...p, documento_visitante: e.target.value }))} maxLength="30" /></label>
+                <label><span>Placa (opcional)</span><input value={visitorForm.placa_visitante} onChange={(e) => setVisitorForm((p) => ({ ...p, placa_visitante: e.target.value.toUpperCase() }))} maxLength="15" /></label>
+                <label><span>Motivo de visita</span><input value={visitorForm.motivo} onChange={(e) => setVisitorForm((p) => ({ ...p, motivo: e.target.value }))} maxLength="255" /></label>
+                <label><span>Válido desde</span><input type="datetime-local" value={visitorForm.vigente_desde} onChange={(e) => setVisitorForm((p) => ({ ...p, vigente_desde: e.target.value }))} required /></label>
+                <label><span>Válido hasta (máximo 24 horas)</span><input type="datetime-local" value={visitorForm.vigente_hasta} onChange={(e) => setVisitorForm((p) => ({ ...p, vigente_hasta: e.target.value }))} required /></label>
+              </div>
+              <div className="form-actions"><button className="primary-btn" type="submit" disabled={!qrEnabled}>Generar invitación QR</button></div>
+            </form>
+          )}
+          {canInviteVisitors && visitorQr?.qr_token ? <div className="qr-display"><QRCodeSVG value={visitorQr.qr_token} size={220} level="M" includeMargin /><p>Invitación para {visitorQr.nombre_visitante}</p><small>Anfitrión responsable: {session.user?.nombre} · Válida hasta {formatDateTime(visitorQr.vigente_hasta)}</small><details className="manual-qr-code"><summary>Mostrar código de respaldo para portería</summary><p>El vigilante puede pegar o escribir este código en la validación manual.</p><textarea aria-label="Código de respaldo de la invitación" readOnly rows="4" value={visitorQr.qr_token} onFocus={(event) => event.target.select()} /></details></div> : null}
         </div>
 
         <div className="panel-card">
@@ -1286,29 +1487,57 @@ function App() {
   };
 
   const renderReportes = () => (
-    <div className="report-stack">
-      <div className="panel-card">
-        <div className="section-header">
-          <h3>Reportes y actividad del establecimiento</h3>
-          <span className="status-pill">Establecimiento {session.user?.id_establecimiento}</span>
+    <div className="rbac-card rbac-card-dark report-stack">
+      <header className="rbac-card-header">
+        <div>
+          <span className="rbac-eyebrow">Reportes · Auditoría operativa</span>
+          <h3>Actividad del establecimiento</h3>
+          <p>
+            Movimientos, incidencias y reconocimientos con aislamiento por
+            establecimiento. Abre cualquier registro para revisar su detalle
+            normalizado y los vínculos con vehículos, usuarios e invitaciones.
+          </p>
         </div>
-        <div className="report-summary">
-          <div className="mini-card"><span>Movimientos</span><strong>{totalMovimientos}</strong></div>
-          <div className="mini-card warning"><span>Incidencias</span><strong>{totalIncidencias}</strong></div>
-          {hasFeature('lpr') ? <div className="mini-card success"><span>Reconocimientos</span><strong>{totalReconocimientos}</strong></div> : null}
+        <div className="rbac-header-actions">
+          <span className="rbac-badge rbac-badge-gold">Establecimiento {session.user?.id_establecimiento}</span>
+          <span className="rbac-badge">{hasFeature('lpr') ? 'LPR activo' : 'LPR no incluido'}</span>
+        </div>
+      </header>
+
+      <div className="rbac-stats report-stats">
+        <div className="rbac-stat">
+          <span>Movimientos</span>
+          <strong>{totalMovimientos.toLocaleString('es-CO')}</strong>
+          <small>ingresos y salidas registrados</small>
+        </div>
+        <div className="rbac-stat">
+          <span>Incidencias</span>
+          <strong>{totalIncidencias.toLocaleString('es-CO')}</strong>
+          <small>eventos que requieren seguimiento</small>
+        </div>
+        <div className="rbac-stat">
+          <span>Reconocimientos</span>
+          <strong>{hasFeature('lpr') ? totalReconocimientos.toLocaleString('es-CO') : '—'}</strong>
+          <small>{hasFeature('lpr') ? 'lecturas LPR procesadas' : 'disponible en plan Avanzado'}</small>
+        </div>
+        <div className="rbac-stat">
+          <span>Sincronización</span>
+          <strong>{syncedInSample}%</strong>
+          <small>de la muestra consultada</small>
         </div>
       </div>
-      <div className="panel-card">
+
+      <div className="panel-card report-activity">
         <div className="section-header report-tabs" role="tablist" aria-label="Registros de actividad">
           {Object.entries(reportConfig).filter(([key]) => key !== 'reconocimientos' || hasFeature('lpr')).map(([key, item]) => (
-            <button key={key} role="tab" aria-selected={activeReport === key} className={`report-tab ${activeReport === key ? 'active' : ''}`} onClick={() => setActiveReport(key)}>
+            <button key={key} type="button" role="tab" aria-selected={activeReport === key} className={`report-tab ${activeReport === key ? 'active' : ''}`} onClick={() => setActiveReport(key)}>
               {item.label} ({reportData[`${key}Count`]})
             </button>
           ))}
         </div>
         {renderReportTable(activeReport, reportData[activeReport])}
         {reportData[activeReport].length < reportData[`${activeReport}Count`] ? (
-          <button className="ghost-btn load-more" onClick={() => handleLoadMoreReport(activeReport)} disabled={loadingMore}>
+          <button type="button" className="rbac-btn rbac-btn-ghost load-more" onClick={() => handleLoadMoreReport(activeReport)} disabled={loadingMore}>
             {loadingMore ? 'Cargando…' : 'Cargar más registros'}
           </button>
         ) : null}
@@ -1317,16 +1546,48 @@ function App() {
   );
 
   const renderSeguridad = () => (
-    <div className="panel-card">
-      <div className="section-header">
-        <h3>Seguridad y auditoría</h3>
-      </div>
-      <div className="security-stack">
-        <div className="security-item">RBAC activo</div>
-        <div className="security-item">JWT con tenant y rol</div>
-        <div className="security-item">Logs de acceso</div>
-        <div className="security-item">Multi-tenant por establecimiento</div>
-        <div className="security-item">La vista web puede abrir sin red; la sincronización pendiente aún no está implementada</div>
+    <div className="rbac-card rbac-card-dark security-panel">
+      <header className="rbac-card-header">
+        <div>
+          <span className="rbac-eyebrow">Defensa de Himinbjörg</span>
+          <h3>Seguridad y auditoría</h3>
+          <p>
+            Heimdall combina RBAC, aislamiento multi-tenant, tokens de corta
+            duración y trazabilidad operativa. Selecciona cualquier control para
+            abrir su ficha técnica de implementación.
+          </p>
+        </div>
+        <div className="rbac-header-actions">
+          <span className="rbac-badge rbac-badge-gold">{SECURITY_FEATURES.length} controles documentados</span>
+          <span className="rbac-badge">Backend como fuente de verdad</span>
+        </div>
+      </header>
+
+      <p className="security-intro">
+        Cada tarjeta explica qué hace el código, dónde vive y cuál es su límite
+        real en esta versión. La ficha se abre en un modal centrado con backdrop
+        oscuro y navegación por teclado.
+      </p>
+
+      <div className="security-grid">
+        {SECURITY_FEATURES.map((feature, index) => (
+          <button
+            key={feature.key}
+            type="button"
+            className="security-item"
+            onClick={() => setSecurityFeature(feature.key)}
+            aria-haspopup="dialog"
+            aria-label={`Ver implementación técnica de ${feature.title}`}
+          >
+            <span className="security-item-number">{String(index + 1).padStart(2, '0')}</span>
+            <span className="security-item-copy">
+              <span className="security-item-eyebrow">{feature.tag}</span>
+              <strong>{feature.title}</strong>
+              <small>{feature.summary}</small>
+            </span>
+            <span className="security-item-action">Ver ficha <span aria-hidden="true">→</span></span>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -1479,6 +1740,49 @@ function App() {
         </section>
 
         <Modal
+          open={Boolean(activeSecurityFeature)}
+          onClose={() => setSecurityFeature(null)}
+          eyebrow={activeSecurityFeature ? `Seguridad · ${activeSecurityFeature.tag}` : 'Seguridad'}
+          title={activeSecurityFeature?.title}
+          description={activeSecurityFeature?.summary}
+          size="lg"
+          theme="dark"
+          footer={(
+            <button type="button" className="rbac-btn rbac-btn-gold" onClick={() => setSecurityFeature(null)}>
+              Entendido
+            </button>
+          )}
+        >
+          {activeSecurityFeature ? (
+            <div className="security-detail">
+              <p>{activeSecurityFeature.intro}</p>
+              <div className="security-detail-tags">
+                {activeSecurityFeature.tag ? <span>{activeSecurityFeature.tag}</span> : null}
+                <span>Documentación viva</span>
+              </div>
+              <h4>Cómo está implementado</h4>
+              <ol className="security-detail-points">
+                {activeSecurityFeature.points.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
+              </ol>
+              <div className="security-detail-code">
+                <span>Implementación resumida</span>
+                <pre><code>{activeSecurityFeature.snippet}</code></pre>
+              </div>
+              <div className="security-detail-files">
+                <span>Archivos clave</span>
+                <ul>
+                  {activeSecurityFeature.files.map((file) => (
+                    <li key={file}><code>{file}</code></li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : null}
+        </Modal>
+
+        <Modal
           open={vehicleFormOpen}
           onClose={() => setVehicleFormOpen(false)}
           eyebrow="Catálogo · Vehículos"
@@ -1580,6 +1884,13 @@ function App() {
             onSaved={handleEstablishmentSaved}
           />
         ) : null}
+
+        <AdminInvitationModal
+          open={adminInviteOpen}
+          onClose={() => setAdminInviteOpen(false)}
+          establishmentId={session.user?.id_establecimiento}
+          establishmentName={session.user?.establecimiento}
+        />
       </main>
     </div>
   );

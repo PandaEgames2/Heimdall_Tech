@@ -1694,3 +1694,68 @@
   }
 }
 
+/* ------------------- Invitación creada por administración ------------------ */
+
+.admin-invite-form {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-invite-grid {
+  gap: 14px;
+}
+
+.admin-invite-success {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.admin-invite-qr {
+  display: grid;
+  padding: 12px;
+  place-items: center;
+  border: 1px solid #ece5d7;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(31, 42, 49, .12);
+}
+
+.admin-invite-summary {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.admin-invite-summary strong {
+  color: #1d2a31;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.18rem;
+}
+
+.admin-invite-summary p {
+  margin: 0;
+  color: #55636a;
+  font-size: .86rem;
+  line-height: 1.5;
+}
+
+.admin-invite-summary .manual-qr-code {
+  margin-top: 8px;
+}
+
+@media (max-width: 640px) {
+  .admin-invite-success {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-invite-qr {
+    justify-self: center;
+  }
+
+  .admin-invite-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

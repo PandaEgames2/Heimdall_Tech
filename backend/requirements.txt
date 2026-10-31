@@ -1,3 +1,5 @@
+# Heimdall Tech — backend Python 3.12
+# Instala con: backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 Django>=5.0,<6
 djangorestframework>=3.15,<4
 djangorestframework-simplejwt>=5.3,<6
@@ -6,4 +8,6 @@ mysql-connector-python>=9.0,<10
 python-dotenv>=1.0,<2
 django-cors-headers>=4.3,<5
 Babel>=2.14,<3
+# FastALPR incluye detector DNN + OCR ONNX. Si no está disponible, el resto
+# del sistema funciona y solo se deshabilita el reconocimiento de placas.
 fast-alpr[onnx]==0.4.0

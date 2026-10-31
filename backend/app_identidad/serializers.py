@@ -548,6 +548,46 @@ class UsuarioSerializer(serializers.ModelSerializer):
         attrs["_roles_provided"] = roles_provided
         final_role_ids = [role.id_rol for role in roles] if roles is not None else role_ids
 
+        # Cupo comercial: sólo consume una plaza un residente activo nuevo, una
+        # reactivación o un traslado a otro establecimiento. Editar nombre,
+        # correo o contraseña de una plaza existente no vuelve a consumir cupo.
+        target_establishment = attrs.get("id_establecimiento") or (
+            instance.id_establecimiento if instance is not None else None
+        )
+        if target_establishment is None:
+            caller_profile = get_usuario_perfil(request_user)
+            target_establishment = (
+                caller_profile.id_establecimiento if caller_profile else None
+            )
+        will_be_resident = RESIDENTE_ROL_ID in final_role_ids
+        will_be_active = attrs.get("estado", getattr(instance, "estado", True)) is not False
+        was_active_resident = bool(
+            instance is not None
+            and instance.estado
+            and RESIDENTE_ROL_ID in current_role_ids
+        )
+        same_establishment = bool(
+            instance is not None
+            and target_establishment is not None
+            and instance.id_establecimiento_id == target_establishment.pk
+        )
+        consumes_new_slot = bool(
+            target_establishment is not None
+            and will_be_resident
+            and will_be_active
+            and (not was_active_resident or not same_establishment)
+        )
+        if consumes_new_slot:
+            from app_empresas.quotas import CupoResidenteExcedido, asegurar_cupo_disponible
+
+            try:
+                asegurar_cupo_disponible(
+                    target_establishment,
+                    excluir_usuario_id=instance.pk if instance is not None else None,
+                )
+            except CupoResidenteExcedido as exc:
+                raise serializers.ValidationError({"cupo": str(exc)}) from exc
+
         if "permisos_excepciones" in attrs and not platform_admin:
             raise serializers.ValidationError(
                 {"permisos_excepciones": "Solo un Super Admin puede asignar excepciones de permisos."}

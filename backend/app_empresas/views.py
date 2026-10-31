@@ -14,7 +14,7 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     lookup_field = "id_plan"
     search_fields = ("nombre", "descripcion")
-    ordering_fields = ("precio", "nombre", "limite_usuarios")
+    ordering_fields = ("precio", "nombre", "limite_usuarios", "cupo_residentes")
 
     def get_queryset(self):
         queryset = super().get_queryset()

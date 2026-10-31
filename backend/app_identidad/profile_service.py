@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app_empresas.features import features_for_establecimiento
+from app_empresas.quotas import estado_cupo
 from app_identidad.models import Rol, Usuario, UsuarioHasRol
 from config.rbac import (
     build_menu,
@@ -16,6 +17,7 @@ from config.rbac import (
     resolve_effective_permissions,
     serialize_role,
 )
+from config.tenant_utils import RESIDENTE_ROL_ID, profile_has_role
 
 
 def _serialize_roles(usuario_counts: dict[int, int] | None = None) -> list[dict[str, Any]]:
@@ -97,6 +99,11 @@ def build_profile_payload(user, perfil: Usuario | None) -> dict[str, Any]:
         "roles": [],
         "roles_asignados": [],
         "funcionalidades": {"manual": True, "qr": False, "rfid": False, "lpr": False},
+        "tipo_entidad": None,
+        "tipo_entidad_etiqueta": "",
+        "permite_invitaciones_residente": False,
+        "puede_invitar": False,
+        "cupo": None,
     }
 
     if perfil is None:
@@ -107,6 +114,12 @@ def build_profile_payload(user, perfil: Usuario | None) -> dict[str, Any]:
     roles = profile_roles(perfil)
     establecimiento = perfil.id_establecimiento
     features = features_for_establecimiento(establecimiento)
+    cupo = estado_cupo(establecimiento)
+    puede_invitar = bool(
+        features.get("qr")
+        and establecimiento.permite_invitaciones_residente
+        and profile_has_role(perfil, RESIDENTE_ROL_ID)
+    )
 
     base.update(
         {
@@ -127,9 +140,23 @@ def build_profile_payload(user, perfil: Usuario | None) -> dict[str, Any]:
             },
             "is_platform_superadmin": is_superadmin,
             "establecimiento": establecimiento.nombre,
+            "tipo_entidad": establecimiento.tipo_entidad,
+            "tipo_entidad_etiqueta": establecimiento.get_tipo_entidad_display(),
+            "permite_invitaciones_residente": bool(
+                establecimiento.permite_invitaciones_residente
+            ),
+            "puede_invitar": puede_invitar,
+            "cupo": cupo,
             "plan": {
                 "id": establecimiento.id_plan_id,
                 "nombre": establecimiento.id_plan.nombre if establecimiento.id_plan else None,
+                "cupo_residentes": getattr(establecimiento.id_plan, "cupo_residentes", None),
+                "precio_excedente": str(
+                    getattr(establecimiento.id_plan, "precio_excedente", "") or ""
+                ),
+                "politica_excedente": getattr(
+                    establecimiento.id_plan, "politica_excedente", None
+                ),
             },
             "funcionalidades": features,
             "menu": build_menu(access["permisos"], features, is_superadmin=is_superadmin),

@@ -35,6 +35,9 @@ CREATE TABLE PLAN (
     descripcion TEXT,
     precio DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
     limite_usuarios INT NOT NULL DEFAULT 5,
+    cupo_residentes INT NOT NULL DEFAULT 170,
+    precio_excedente DECIMAL(10, 2) NOT NULL DEFAULT 0.75,
+    politica_excedente VARCHAR(10) NOT NULL DEFAULT 'COBRO',
     permite_ia BOOLEAN NOT NULL DEFAULT FALSE,
     estado BOOLEAN NOT NULL DEFAULT TRUE,
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -49,6 +52,8 @@ CREATE TABLE ESTABLECIMIENTO (
     nombre VARCHAR(100) NOT NULL,
     direccion VARCHAR(200) NOT NULL,
     telefono VARCHAR(20),
+    tipo_entidad VARCHAR(30) NOT NULL DEFAULT 'RESIDENCIAL',
+    permite_invitaciones_residente BOOLEAN NOT NULL DEFAULT TRUE,
     estado BOOLEAN NOT NULL DEFAULT TRUE,
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_establecimiento_plan FOREIGN KEY (id_plan)
@@ -281,20 +286,20 @@ CREATE INDEX idx_incidencia_est_fecha ON INCIDENCIA (id_establecimiento, fecha_i
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- =============================================================================
--- DATOS DE PRUEBA (100 registros distribuidos — entorno demo comercial)
+-- DATOS DE PRUEBA (100+ registros distribuidos — entorno demo comercial)
 -- password_hash: solo desarrollo; reemplazar con hash Argon2/bcrypt en producción.
 -- =============================================================================
 
-INSERT INTO PLAN (id_plan, nombre, descripcion, precio, limite_usuarios, permite_ia) VALUES
-(1, 'Basico', 'Gestión manual y códigos QR', 49.99, 5, FALSE),
-(2, 'Medio', 'Integración con etiquetas RFID y antenas', 129.99, 15, FALSE),
-(3, 'Avanzado', 'Cámaras LPR e IA de reconocimiento de placas', 299.99, 50, TRUE);
+INSERT INTO PLAN (id_plan, nombre, descripcion, precio, limite_usuarios, cupo_residentes, precio_excedente, politica_excedente, permite_ia) VALUES
+(1, 'Basico', 'Gestión manual y códigos QR', 49.99, 5, 170, 0.75, 'COBRO', FALSE),
+(2, 'Medio', 'Integración con etiquetas RFID y antenas', 129.99, 15, 400, 0.50, 'COBRO', FALSE),
+(3, 'Avanzado', 'Cámaras LPR e IA de reconocimiento de placas', 299.99, 50, 900, 0.35, 'COBRO', TRUE);
 
-INSERT INTO ESTABLECIMIENTO (id_establecimiento, id_plan, nombre, direccion, telefono, estado) VALUES
-(1, 1, 'Conjunto Residencial Los Pinos', 'Calle 1 #2-3, Riohacha', '3001000001', TRUE),
-(2, 2, 'Edificio Empresarial Norte', 'Cra 15 #4-5, Maicao', '3102000002', TRUE),
-(3, 3, 'Universidad de La Guajira', 'Km 5 Vía Maicao', '3203000003', TRUE),
-(4, 1, 'Centro Logístico Manaure', 'Zona Industrial, Manaure', '3154000004', TRUE);
+INSERT INTO ESTABLECIMIENTO (id_establecimiento, id_plan, nombre, direccion, telefono, tipo_entidad, permite_invitaciones_residente, estado) VALUES
+(1, 1, 'Conjunto Residencial Los Pinos', 'Calle 1 #2-3, Riohacha', '3001000001', 'RESIDENCIAL', TRUE, TRUE),
+(2, 2, 'Edificio Empresarial Norte', 'Cra 15 #4-5, Maicao', '3102000002', 'EMPRESA_ALTA_SEGURIDAD', FALSE, TRUE),
+(3, 3, 'Universidad de La Guajira', 'Km 5 Vía Maicao', '3203000003', 'GUBERNAMENTAL', FALSE, TRUE),
+(4, 1, 'Centro Logístico Manaure', 'Zona Industrial, Manaure', '3154000004', 'EMPRESA_ALTA_SEGURIDAD', FALSE, TRUE);
 
 INSERT INTO ROL (id_rol, nombre, descripcion, permisos) VALUES
 (1, 'Administrador', 'Control total del establecimiento', '["dashboard","usuarios","catalogos","reportes","camaras","accesos","puede_editar","puede_eliminar"]'),

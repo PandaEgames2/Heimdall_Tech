@@ -106,6 +106,10 @@ if ($LASTEXITCODE -ne 0) { exit 1 }
 & $Python (Join-Path $Backend "manage.py") ensure_operational_schema
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
+Write-Host "Sincronizando cupos por plan y restricciones de invitación..."
+& $Python (Join-Path $Backend "manage.py") ensure_plan_quota_schema
+if ($LASTEXITCODE -ne 0) { exit 1 }
+
 & $Python (Join-Path $Backend "manage.py") check
 if ($LASTEXITCODE -ne 0) { exit 1 }
 

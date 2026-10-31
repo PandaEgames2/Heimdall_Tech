@@ -1,43 +1,66 @@
-# Guía rápida para instalar Heimdall Tech
+# Guía de arranque en 5 minutos
 
-Esta guía resume el primer arranque en una PC Windows. La primera instalación puede tardar más de cinco minutos porque descarga dependencias.
+Esta guía deja Heimdall Tech funcionando en Windows con MySQL, backend Django y frontend React. La primera instalación puede tardar más de cinco minutos porque descarga dependencias y, en la primera captura LPR, modelos de IA.
+
+> Para el contexto completo de arquitectura, RBAC, cupos y diseño, consulta el [README principal](README.md) y [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).
 
 ## Antes de empezar
 
 - Windows 10/11 de 64 bits y PowerShell.
-- Python 3.12 de 64 bits (versión de referencia para el proyecto).
-- Node.js 20.19+ o 22.12+ (incluye npm).
-- MySQL Server 8+ instalado y activo, con una cuenta que pueda crear base de datos y tablas.
-- Git para clonar el repo (opcional si recibiste una copia del código).
-- Internet para descargar paquetes y, en la primera prueba LPR, los modelos de IA.
+- Python **3.12** de 64 bits.
+- Node.js **20.19+** o **22.12+** (incluye npm).
+- MySQL Server **8+** activo. La cuenta debe poder crear la base en una instalación nueva.
+- Git para clonar el repositorio (opcional si ya tienes la carpeta).
+- Internet para dependencias y para la primera descarga de modelos FastALPR.
 
-## 1. Obtener el código
+Comprueba las versiones:
+
+```powershell
+py -3.12 --version
+node --version
+npm --version
+```
+
+## 1. Obtener el código y preparar Python
 
 ```powershell
 git clone https://github.com/PandaEgames2/Heimdall_Tech.git
 cd Heimdall_Tech
-```
-
-Si ya tienes la carpeta, abre PowerShell en ella. Comprueba versiones con `py -3.12 --version`, `node --version` y `npm --version`.
-
-En VS Code, abre la carpeta raíz del proyecto y usa **Terminal → Nueva terminal** para trabajar desde PowerShell sin salir del editor.
-
-## 2. Preparar Python y las dependencias del backend
-
-Desde la raíz del proyecto:
-
-```powershell
 py -3.12 -m venv backend\.venv
 backend\.venv\Scripts\python.exe -m pip install --upgrade pip
 backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+```
+
+## 2. Configurar la conexión MySQL
+
+```powershell
 Copy-Item backend\.env.example backend\.env
 ```
 
-Edita `backend\.env` y ajusta `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` y `DB_NAME` para la instancia MySQL de esa PC. No subas `backend\.env` a GitHub. Si `mysqlclient` intenta compilarse y no encuentra dependencias, sigue la nota oficial de [instalación de mysqlclient en Windows](https://github.com/PyMySQL/mysqlclient/blob/main/README.md#install).
+Edita `backend\.env` y ajusta al menos:
 
-## 3. Crear el esquema inicial
+```env
+DJANGO_SECRET_KEY=una-clave-larga-y-aleatoria
+DJANGO_DEBUG=True
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+DB_NAME=heimdall_tech
+DB_USER=root
+DB_PASSWORD=tu_contraseña_de_mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+```
 
-En una base nueva, desde la carpeta `backend`:
+Genera la clave con:
+
+```powershell
+backend\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+No subas `backend\.env` ni `frontend\.env` a GitHub.
+
+## 3. Crear la base y cargar el seed demo
+
+En una base **nueva o desechable**, desde `backend`:
 
 ```powershell
 cd backend
@@ -47,9 +70,13 @@ cd backend
 cd ..
 ```
 
-`--execute` importa `Heimdall_Tech.sql`, que elimina y crea tablas funcionales: úsalo solo para una base nueva o desechable. No lo ejecutes sobre datos que quieras conservar. La cuenta de MySQL debe tener permiso `CREATE DATABASE`. `--check-schema` confirma que las tablas base existan; si falta alguna, no continúes con el arranque hasta importar el esquema.
+`--execute` importa `Heimdall_Tech.sql` y **elimina/crea** las tablas funcionales. No lo uses sobre una base con datos que quieras conservar.
 
-## 4. Instalar dependencias del frontend
+El SQL carga **más de 160 filas demo**: 3 planes, 4 establecimientos, 5 roles base, recursos RBAC, 20 usuarios, responsables, vehículos, movimientos, reconocimientos, invitaciones e incidencias. Los cupos de plan quedan en **170 / 400 / 900** con política `COBRO`.
+
+Si ya tienes una base Heimdall con datos, no ejecutes el SQL: salta al paso 5 y deja que `iniciar.ps1` aplique los cambios idempotentes.
+
+## 4. Instalar el frontend
 
 ```powershell
 cd frontend
@@ -58,37 +85,50 @@ Copy-Item .env.example .env
 cd ..
 ```
 
-`VITE_API_URL` puede quedar vacía para que el navegador use el backend en el mismo host, puerto `8000`.
+Con `VITE_API_URL` vacío, el navegador usa el mismo host en el puerto `8000`. Para un backend remoto o fijo, edita `frontend\.env`:
 
-## 5. Arrancar
+```env
+VITE_API_URL=http://localhost:8000/api
+```
 
-Con MySQL activo y `backend\.env` configurado, ejecuta desde la raíz:
+## 5. Arrancar con `iniciar.ps1`
+
+Con MySQL activo, desde la raíz del proyecto:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\iniciar.ps1
 ```
 
-Si el archivo sigue bloqueado, usa `powershell -ExecutionPolicy Bypass -File .\iniciar.ps1`.
+Si PowerShell bloquea el archivo:
 
-El script comprueba MySQL y las tablas base, aplica migraciones internas de Django, sincroniza el esquema RBAC de cinco tablas, asegura las cuentas demo y el esquema operativo, ejecuta `manage.py check` e inicia los dos servidores. No importa el SQL destructivo. Si falta FastALPR muestra un aviso; el resto del sistema funciona y solo se deshabilita el reconocimiento de placas.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\iniciar.ps1
+```
 
-Abre la landing en <http://localhost:5173/>, inicia sesión en <http://localhost:5173/login> y entra al panel en <http://localhost:5173/panel>. API: <http://localhost:8000/api/>. Estado: <http://localhost:8000/api/health/>.
+El script:
 
-## Roles, usuarios y recursos
+1. Prepara o reutiliza `backend\.venv`.
+2. Copia `backend\.env` y `frontend\.env` desde los ejemplos si faltan.
+3. Verifica MySQL y las tablas base.
+4. Ejecuta `migrate`.
+5. Sincroniza RBAC, cuentas demo, esquema operativo y cupos por plan.
+6. Ejecuta `manage.py check`.
+7. Inicia la API en `8000` y el frontend en `5173` (o el siguiente puerto libre hasta `5180`).
 
-El control de acceso usa cinco tablas: `USUARIO`, `ROL`, `RECURSO`, `USUARIO_HAS_ROL` y `ROL_HAS_RECURSO`. Desde el panel, el Super Admin puede:
+Abre:
 
-- Crear usuarios y asignarles varios roles, eligiendo uno como principal.
-- Crear, editar y eliminar roles personalizados, y marcar sus recursos.
-- Abrir la vista **Recursos** para administrar los módulos y acciones del catálogo.
-- Ajustar excepciones individuales de permisos por usuario.
+- Landing: <http://localhost:5173/>
+- Login: <http://localhost:5173/login>
+- Panel: <http://localhost:5173/panel>
+- API: <http://localhost:8000/api/>
+- Salud: <http://localhost:8000/api/health/>
 
-Los administradores de establecimiento pueden gestionar usuarios de su sede, pero no crear roles, recursos ni excepciones. Los roles base están protegidos y los recursos del sistema no se pueden eliminar ni desactivar. Todos los formularios se abren en modales centrados con overlay oscuro.
+El script no importa el SQL ni reinicia tus datos. Si FastALPR no está disponible, muestra un aviso y el resto del sistema funciona sin LPR.
 
-## Cuentas de demostración
+## 6. Entrar con cuentas demo
 
-Todas las cuentas demo comparten la contraseña `Heimdall#2026`.
+Todas usan la contraseña **`Heimdall#2026`**:
 
 | Rol | Usuario |
 |---|---|
@@ -105,12 +145,84 @@ Todas las cuentas demo comparten la contraseña `Heimdall#2026`.
 | Administrador Logístico | `admin@logistico.com` |
 | Vigilante Logístico | `porteria@logistico.com` |
 
-Las contraseñas solo se muestran con `$env:HEIMDALL_SHOW_DEMO_CREDENTIALS=1` antes de iniciar. Cambia la contraseña demo con `HEIMDALL_DEMO_PASSWORD` si lo necesitas. Si una base antigua falla al iniciar sesión, ejecuta `python manage.py ensure_demo_accounts --reset-passwords` para reparar los hashes y migrarlos a scrypt.
+Para verlas durante el arranque:
 
-## Si algo falla
+```powershell
+$env:HEIMDALL_SHOW_DEMO_CREDENTIALS=1
+.\iniciar.ps1
+```
 
-- `Failed to fetch`: confirma que `http://localhost:8000/api/` responde y que frontend/backend están activos.
-- Error de MySQL: revisa servicio, puerto y credenciales en `backend\.env`.
-- Faltan tablas base: ejecuta `python backend\bootstrap_db.py --check-schema`; en una base nueva importa el SQL con `--execute`. No lo hagas sobre datos que quieras conservar.
-- Cámara bloqueada: usa `localhost` o HTTPS y concede el permiso del navegador; en QR se puede usar el código escrito.
-- El inicio completo, la configuración detallada y la guía móvil están en el [README principal](README.md) y [USO_MOVIL.md](USO_MOVIL.md).
+Para cambiar la contraseña demo:
+
+```powershell
+$env:HEIMDALL_DEMO_PASSWORD="OtraClaveSegura#2026"
+```
+
+Si una base antigua falla al iniciar sesión:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe manage.py ensure_demo_accounts --reset-passwords
+```
+
+## 7. Verificar cupos y contextos
+
+### Planes y cupos
+
+| Plan | Precio base | Residentes incluidos | Excedente | Política seed |
+|---|---:|---:|---:|---|
+| Básico | $49.99 | 170 | $0.75 / persona / mes | `COBRO` |
+| Medio | $129.99 | 400 | $0.50 / persona / mes | `COBRO` |
+| Avanzado | $299.99 | 900 | $0.35 / persona / mes | `COBRO` |
+
+El cupo cuenta usuarios **activos con rol Residente** del establecimiento, incluidos los que lo tienen como rol secundario. No cuenta vigilantes, supervisores ni administradores.
+
+- `COBRO`: permite el alta y estima el cobro extra mensual.
+- `BLOQUEO`: rechaza el alta y exige un upgrade.
+
+La validación real está en el backend (`app_empresas/quotas.py` y `UsuarioSerializer`); el banner de **Catálogo** solo muestra el estado.
+
+### Tipos de establecimiento
+
+| Tipo | Invitaciones de residentes |
+|---|---|
+| `RESIDENCIAL` | Habilitadas por defecto. |
+| `GUBERNAMENTAL` | Deshabilitadas por defecto; solo administración invita. |
+| `EMPRESA_ALTA_SEGURIDAD` | Deshabilitadas por defecto; solo administración invita. |
+
+En un contexto estricto, el residente/empleado no ve el formulario de invitación y la API responde `403`. El Super Admin puede habilitar la bandera desde el formulario de establecimiento o crear la invitación como administrador.
+
+Los establecimientos demo quedaron así:
+
+- **Los Pinos:** residencial, invitaciones habilitadas.
+- **Edificio Empresarial Norte:** alta seguridad, invitaciones deshabilitadas.
+- **Universidad de La Guajira:** gobierno, invitaciones deshabilitadas.
+- **Centro Logístico Manaure:** alta seguridad, invitaciones deshabilitadas.
+
+## 8. Comandos útiles
+
+```powershell
+# Backend
+cd backend
+.\.venv\Scripts\python.exe manage.py check
+.\.venv\Scripts\python.exe manage.py ensure_rbac_schema
+.\.venv\Scripts\python.exe manage.py ensure_operational_schema
+.\.venv\Scripts\python.exe manage.py ensure_plan_quota_schema
+
+# Frontend
+cd frontend
+npm run lint
+npm run build
+```
+
+## 9. Si algo falla
+
+- **`No module named django`:** usa `backend\.venv\Scripts\python.exe`, no el Python global.
+- **Error de MySQL:** revisa servicio, puerto y credenciales en `backend\.env`; ejecuta `bootstrap_db.py --check`.
+- **`Failed to fetch`:** confirma que `http://localhost:8000/api/` responde y que frontend/backend están activos.
+- **Faltan tablas base:** en una base nueva importa el SQL con `--execute`. En una base con datos, no lo hagas: ejecuta los comandos `ensure_*` y haz copia de seguridad.
+- **Cámara bloqueada:** usa `localhost` o HTTPS; para QR puedes usar el código manual de 6 dígitos.
+- **El cupo bloquea un alta:** cambia a un plan superior o ajusta la política a `COBRO`.
+- **Un residente no ve invitaciones:** el establecimiento es estricto o la bandera está apagada; la administración debe autorizarlo.
+
+El inicio completo, la arquitectura y la solución de problemas detallada están en el [README principal](README.md) y en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).

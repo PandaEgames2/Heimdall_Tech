@@ -199,6 +199,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 "roles_asignados",
                 "roles_ids",
                 "funcionalidades",
+                "tipo_entidad",
+                "tipo_entidad_etiqueta",
+                "permite_invitaciones_residente",
+                "puede_invitar",
+                "cupo",
             ):
                 if key in profile_payload:
                     data["user"][key] = profile_payload[key]
