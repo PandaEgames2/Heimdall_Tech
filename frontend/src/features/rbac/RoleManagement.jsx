@@ -103,7 +103,7 @@ export default function RoleManagement({ catalogo = [], isSuperAdmin = false, on
 
   if (!isSuperAdmin) {
     return (
-      <div className="rbac-card">
+      <div className="rbac-card rbac-card-dark">
         <div className="rbac-empty">
           <strong>Acceso restringido</strong>
           <p>La gestión de roles globales es exclusiva del Super Admin.</p>
@@ -113,7 +113,7 @@ export default function RoleManagement({ catalogo = [], isSuperAdmin = false, on
   }
 
   return (
-    <div className="rbac-card">
+    <div className="rbac-card rbac-card-dark">
       <header className="rbac-card-header">
         <div>
           <span className="rbac-eyebrow">RBAC · Acceso restringido</span>

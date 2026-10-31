@@ -16,7 +16,12 @@ from rest_framework.views import APIView
 from app_empresas.features import features_for_establecimiento
 from app_identidad.models import Usuario
 from config.permissions import IsResident, IsTenantAdmin, IsTenantStaff, IsTenantStaffOrResident
-from config.tenant_utils import RESIDENTE_ROL_ID, get_usuario_perfil, is_platform_superadmin
+from config.tenant_utils import (
+    RESIDENTE_ROL_ID,
+    get_usuario_perfil,
+    is_platform_superadmin,
+    profile_has_role,
+)
 
 from app_empresas.models import Establecimiento
 
@@ -144,7 +149,7 @@ class QRResidenteView(APIView):
 
     def post(self, request):
         profile = get_usuario_perfil(request.user)
-        if not profile or profile.id_rol_id != RESIDENTE_ROL_ID:
+        if not profile or not profile_has_role(profile, RESIDENTE_ROL_ID):
             raise PermissionDenied("Solo un residente puede generar su QR de acceso.")
         _require_qr_feature(profile.id_establecimiento)
 
@@ -329,13 +334,13 @@ class InvitacionVisitanteViewSet(EstablecimientoQueryParamMixin, viewsets.ModelV
     def get_queryset(self):
         queryset = super().get_queryset()
         profile = get_usuario_perfil(self.request.user)
-        if profile and profile.id_rol_id == RESIDENTE_ROL_ID:
+        if profile and profile_has_role(profile, RESIDENTE_ROL_ID):
             queryset = queryset.filter(id_residente_id=profile.id_usuario)
         return queryset
 
     def create(self, request, *args, **kwargs):
         profile = get_usuario_perfil(request.user)
-        if not profile or profile.id_rol_id != RESIDENTE_ROL_ID:
+        if not profile or not profile_has_role(profile, RESIDENTE_ROL_ID):
             raise PermissionDenied("Las invitaciones QR las crea el residente anfitrión.")
         _require_qr_feature(profile.id_establecimiento)
         serializer = self.get_serializer(data=request.data)
@@ -354,9 +359,10 @@ class InvitacionVisitanteViewSet(EstablecimientoQueryParamMixin, viewsets.ModelV
     def revocar(self, request, id_invitacion=None):
         profile = get_usuario_perfil(request.user)
         invitation = self.get_object()
-        if profile.id_rol_id == RESIDENTE_ROL_ID and invitation.id_residente_id != profile.id_usuario:
+        is_resident = bool(profile and profile_has_role(profile, RESIDENTE_ROL_ID))
+        if is_resident and invitation.id_residente_id != profile.id_usuario:
             raise PermissionDenied("Solo puedes revocar tus propias invitaciones.")
-        if not _is_staff(profile) and profile.id_rol_id != RESIDENTE_ROL_ID:
+        if not _is_staff(profile) and not is_resident:
             raise PermissionDenied("No tienes permiso para revocar invitaciones.")
         if invitation.estado != InvitacionVisitante.Estado.PENDIENTE:
             raise ValidationError({"estado": "Solo se pueden revocar invitaciones pendientes."})

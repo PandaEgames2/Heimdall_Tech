@@ -35,7 +35,21 @@ export default function Sidebar({
     (item) => !item.superadmin_only || isSuperAdmin,
   );
 
-  const grouped = GROUP_ORDER.map((group) => ({
+  const groupNames = [];
+  items.forEach((item) => {
+    const group = item.group || 'General';
+    if (!groupNames.includes(group)) groupNames.push(group);
+  });
+  groupNames.sort((a, b) => {
+    const indexA = GROUP_ORDER.indexOf(a);
+    const indexB = GROUP_ORDER.indexOf(b);
+    if (indexA === -1 && indexB === -1) return 0;
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+
+  const grouped = groupNames.map((group) => ({
     group,
     items: items.filter((item) => (item.group || 'General') === group),
   })).filter((section) => section.items.length > 0);

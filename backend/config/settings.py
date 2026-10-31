@@ -127,9 +127,11 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Scrypt es memory-hard y en este hardware verifica en ~1/3 del tiempo que
-# PBKDF2 con 1.000.000 de iteraciones. PBKDF2 se conserva para validar hashes
-# antiguos; el login los rehashea a scrypt automáticamente.
+# PBKDF2 con 1.000.000 de iteraciones. El hasher propio usa parallelism=1 para
+# que el login ronde los 100 ms en equipos de portería. PBKDF2 se conserva para
+# validar hashes antiguos; el login los rehashea al hasher preferido.
 PASSWORD_HASHERS = [
+    "app_identidad.hashers.HeimdallScryptPasswordHasher",
     "django.contrib.auth.hashers.ScryptPasswordHasher",
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
 ]

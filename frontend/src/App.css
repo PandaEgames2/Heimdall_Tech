@@ -1974,3 +1974,85 @@ summary:focus-visible {
   letter-spacing: .2em;
   text-transform: uppercase;
 }
+
+/* ==========================================================================
+   Menú lateral: scroll independiente, iconos encuadrados y módulos dinámicos
+   ========================================================================== */
+@media (min-width: 901px) {
+  .sidebar {
+    overflow: hidden;
+  }
+
+  .side-menu {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 2px;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(214, 184, 114, .38) transparent;
+  }
+
+  .side-menu::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .side-menu::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(214, 184, 114, .32);
+  }
+
+  .side-menu::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+.nav-icon-wrap {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  padding: 2px;
+}
+
+.nav-icon {
+  display: block;
+  width: 24px;
+  height: 24px;
+  overflow: visible;
+}
+
+@media (max-width: 900px) {
+  .nav-btn .nav-icon-wrap {
+    width: 25px;
+    height: 25px;
+    flex: 0 0 25px;
+    padding: 1px;
+  }
+}
+
+.custom-module-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.custom-module-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.catalog-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .custom-module-grid {
+    grid-template-columns: 1fr;
+  }
+}

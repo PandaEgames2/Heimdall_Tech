@@ -540,6 +540,49 @@ def has_permission(access: dict[str, Any], key: str) -> bool:
     return key in access.get("permisos", [])
 
 
+def _custom_menu_items(allowed: set[str]) -> list[dict[str, Any]]:
+    """Convierte recursos personalizados de tipo módulo en entradas de menú.
+
+    Los módulos del sistema siguen viviendo en ``MENU_DEFINITIONS``. Cualquier
+    recurso creado desde la pantalla de Recursos con estado activo se agrega al
+    menú del rol que lo tenga asignado, usando su clave como identificador de
+    navegación.
+    """
+
+    builtin_keys = {item["key"] for item in MENU_DEFINITIONS}
+    try:
+        from app_identidad.models import Recurso
+
+        custom_modules = list(
+            Recurso.objects.filter(tipo=Recurso.Tipo.MODULO, estado=True)
+            .exclude(clave__in=builtin_keys)
+            .order_by("orden", "id_recurso")
+        )
+    except Exception:
+        # La tabla RECURSO puede no existir en un esquema antiguo. El menú
+        # estándar debe seguir funcionando igual.
+        return []
+
+    items: list[dict[str, Any]] = []
+    for module in custom_modules:
+        if module.clave not in allowed:
+            continue
+        items.append(
+            {
+                "key": module.clave,
+                "label": module.nombre,
+                "group": module.grupo or "General",
+                "icon": "catalogos",
+                "visible": True,
+                "locked_by_plan": False,
+                "superadmin_only": False,
+                "description": module.descripcion or "",
+                "custom": True,
+            }
+        )
+    return items
+
+
 def build_menu(
     permissions: Iterable[str],
     funcionalidades: dict[str, bool] | None,
@@ -567,6 +610,7 @@ def build_menu(
                 "superadmin_only": item["superadmin_only"],
             }
         )
+    menu.extend(_custom_menu_items(allowed))
     return menu
 
 

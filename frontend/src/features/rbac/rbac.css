@@ -1615,6 +1615,67 @@
   color: #8ea2ba;
 }
 
+.rbac-card-dark .rbac-resource-cell strong {
+  color: #f4f8fe;
+}
+
+.rbac-card-dark .rbac-resource-cell small {
+  color: #8ea2ba;
+}
+
+.rbac-card-dark .rbac-resource-cell code,
+.rbac-card-dark .rbac-resource-key {
+  border-color: rgba(216, 181, 109, .28);
+  color: #f0d79a;
+  background: rgba(216, 181, 109, .08);
+}
+
+.rbac-card-dark .rbac-resource-glyph {
+  border-color: rgba(216, 181, 109, .32);
+  color: #f0d79a;
+  background: linear-gradient(145deg, rgba(216, 181, 109, .16), rgba(201, 162, 74, .04));
+}
+
+.rbac-card-dark .rbac-resource-glyph.is-action {
+  border-color: rgba(112, 170, 214, .32);
+  color: #b9dcff;
+  background: linear-gradient(145deg, rgba(112, 170, 214, .14), rgba(60, 110, 160, .05));
+}
+
+.rbac-card-dark .rbac-type-badge {
+  border-color: rgba(148, 172, 204, .24);
+  color: #c7d5e6;
+  background: rgba(255, 255, 255, .045);
+}
+
+.rbac-card-dark .rbac-type-badge.is-action {
+  border-color: rgba(112, 170, 214, .32);
+  color: #b9dcff;
+  background: rgba(112, 170, 214, .09);
+}
+
+.rbac-card-dark .rbac-type-badge.is-custom {
+  border-color: rgba(216, 181, 109, .38);
+  color: #f0d79a;
+  background: rgba(216, 181, 109, .09);
+}
+
+.rbac-card-dark .rbac-pill {
+  border-color: rgba(148, 172, 204, .22);
+  color: #c7d5e6;
+  background: rgba(255, 255, 255, .045);
+}
+
+.rbac-card-dark .rbac-pill-more {
+  border-color: rgba(216, 181, 109, .4);
+  color: #f0d79a;
+  background: rgba(216, 181, 109, .09);
+}
+
+.rbac-card-dark .rbac-empty p {
+  color: #94a7bd;
+}
+
 @media (max-width: 760px) {
   .rbac-resource-cell {
     min-width: 190px;

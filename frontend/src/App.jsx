@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserQRCodeReader } from '@zxing/browser';
 import { QRCodeSVG } from 'qrcode.react';
 import Sidebar from './components/Sidebar';
+import Modal from './components/Modal';
 import LandingPage from './features/landing/LandingPage';
+import EstablishmentModal from './features/empresas/EstablishmentModal';
 import RoleManagement from './features/rbac/RoleManagement';
 import ResourceManagement from './features/rbac/ResourceManagement';
 import UserManagement from './features/rbac/UserManagement';
@@ -219,6 +221,7 @@ function App() {
   const [activeCatalog, setActiveCatalog] = useState('planes');
   const [activeReport, setActiveReport] = useState('movimientos');
   const [selectedDetail, setSelectedDetail] = useState(null);
+  const [establishmentModal, setEstablishmentModal] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [movementForm, setMovementForm] = useState({ placa_leida: '', id_vehiculo: '', codigo_rfid: '', tipo_movimiento: 'INGRESO', observacion: '' });
   const [movementSaved, setMovementSaved] = useState('');
@@ -254,20 +257,32 @@ function App() {
   });
 
   const isPlatformSuperAdmin = Boolean(session.user?.is_platform_superadmin);
-  const isResident = session.user?.rol === 'Residente' || Number(session.user?.rol_id) === 5;
+  const isResident = session.user?.rol === 'Residente'
+    || Number(session.user?.rol_id) === 5
+    || (session.user?.roles_ids || []).some((roleId) => Number(roleId) === 5);
   const effectivePermissions = useMemo(
     () => (Array.isArray(session.user?.permisos_efectivos) ? session.user.permisos_efectivos : []),
     [session.user?.permisos_efectivos],
   );
-  const canAccess = (key) => effectivePermissions.includes(key);
+  const menuKeys = useMemo(
+    () => new Set(
+      (session.user?.menu || [])
+        .filter((item) => item.visible !== false)
+        .map((item) => item.key),
+    ),
+    [session.user?.menu],
+  );
+  const canAccess = (key) => effectivePermissions.includes(key) || menuKeys.has(key);
   const hasFeature = (feature) => Boolean(isPlatformSuperAdmin || session.user?.funcionalidades?.[feature]);
 
   useEffect(() => {
     if (!session.user) return;
-    if (effectivePermissions.includes(activeTab)) return;
+    const allowed = new Set(effectivePermissions);
+    menuKeys.forEach((key) => allowed.add(key));
+    if (allowed.has(activeTab)) return;
     const fallback = session.user?.menu?.find((item) => item.visible !== false)?.key || 'dashboard';
-    setActiveTab(effectivePermissions.includes(fallback) ? fallback : 'dashboard');
-  }, [session.user, activeTab, effectivePermissions]);
+    setActiveTab(allowed.has(fallback) ? fallback : 'dashboard');
+  }, [session.user, activeTab, effectivePermissions, menuKeys]);
 
   useEffect(() => {
     const handleOnline = () => setOfflineMode(false);
@@ -571,6 +586,24 @@ function App() {
     setActiveTab('dashboard');
     setError('');
     navigate('/', { replace: true });
+  };
+
+  const handleEstablishmentSaved = (saved, wasEditing) => {
+    setCatalogData((current) => {
+      const list = wasEditing
+        ? current.establecimientos.map((item) => (
+            item.id_establecimiento === saved.id_establecimiento ? saved : item
+          ))
+        : [saved, ...current.establecimientos];
+      return {
+        ...current,
+        establecimientos: list,
+        establecimientosCount: list.length,
+      };
+    });
+    setEstablishmentModal(null);
+    setActiveCatalog('establecimientos');
+    refreshProfile();
   };
 
   const handleCreateVehicle = async (event) => {
@@ -1023,9 +1056,13 @@ function App() {
       <div className="catalog-panel">
         <div className="section-header">
           <h3>Catálogo y gestión</h3>
-          {activeCatalog === 'vehiculos' && canAccess('usuarios') ? (
-            <button className="primary-btn" onClick={() => setVehicleFormOpen((open) => !open)}>
-              {vehicleFormOpen ? 'Cerrar' : '+ Registrar vehículo'}
+          {activeCatalog === 'establecimientos' && isPlatformSuperAdmin ? (
+            <button className="primary-btn" onClick={() => setEstablishmentModal({ establishment: null })}>
+              + Nuevo establecimiento
+            </button>
+          ) : activeCatalog === 'vehiculos' && canAccess('usuarios') ? (
+            <button className="primary-btn" onClick={() => setVehicleFormOpen(true)}>
+              + Registrar vehículo
             </button>
           ) : null}
         </div>
@@ -1038,33 +1075,6 @@ function App() {
             </button>
           ))}
         </div>
-        {activeCatalog === 'vehiculos' && vehicleFormOpen ? (
-          <form className="form-panel" onSubmit={handleCreateVehicle}>
-            <div className="field-grid">
-              <label><span>Placa</span><input value={vehicleForm.placa} onChange={(e) => setVehicleForm((p) => ({ ...p, placa: e.target.value.toUpperCase() }))} required maxLength="15" /></label>
-              <label><span>Marca</span><input value={vehicleForm.marca} onChange={(e) => setVehicleForm((p) => ({ ...p, marca: e.target.value }))} /></label>
-              <label><span>Modelo</span><input value={vehicleForm.modelo} onChange={(e) => setVehicleForm((p) => ({ ...p, modelo: e.target.value }))} /></label>
-              <label><span>Color</span><input value={vehicleForm.color} onChange={(e) => setVehicleForm((p) => ({ ...p, color: e.target.value }))} /></label>
-              {session.user?.funcionalidades?.rfid ? <label><span>Código RFID (opcional)</span><input value={vehicleForm.codigo_rfid} onChange={(e) => setVehicleForm((p) => ({ ...p, codigo_rfid: e.target.value.trim() }))} maxLength="100" /></label> : null}
-              <label>
-                <span>Responsable / residente</span>
-                <select value={vehicleForm.id_responsable} onChange={(e) => setVehicleForm((p) => ({ ...p, id_responsable: e.target.value }))}>
-                  <option value="">Sin responsable</option>
-                  {catalogData.responsables.map((person) => <option key={person.id_responsable} value={person.id_responsable}>{person.nombre}{person.departamento_unidad ? ` · ${person.departamento_unidad}` : ''}</option>)}
-                </select>
-              </label>
-              <label>
-                <span>Autorización</span>
-                <select value={vehicleForm.tipo_autorizacion} onChange={(e) => setVehicleForm((p) => ({ ...p, tipo_autorizacion: e.target.value }))}>
-                  <option value="AUTORIZADO">Residente autorizado</option>
-                  <option value="VISITANTE">Visitante</option>
-                  <option value="RESTRINGIDO">Restringido</option>
-                </select>
-              </label>
-            </div>
-            <div className="form-actions"><button className="primary-btn" type="submit">Guardar vehículo</button></div>
-          </form>
-        ) : null}
         <div className="panel-card catalog-records">
           <div className="section-header">
             <div>
@@ -1076,12 +1086,24 @@ function App() {
             <table className="data-table detail-table">
               <thead><tr>{catalogColumns[activeCatalog].map((column) => <th key={column}>{column}</th>)}<th>Consulta</th></tr></thead>
               <tbody>
-                {selected.records.map((record, index) => (
-                  <tr key={record.id_plan || record.id_establecimiento || record.id_vehiculo || record.id_incidencia || index}>
+                {selected.records.map((record, index) => {
+                  const recordId = record[detailConfig[activeCatalog]?.idField] ?? index;
+                  return (
+                  <tr key={`${activeCatalog}-${recordId}`}>
                     {cellsFor(record).map((cell, cellIndex) => <td key={cellIndex}>{cell || '—'}</td>)}
-                    <td><button className="ghost-btn" onClick={() => handleOpenDetail(activeCatalog, record)}>Ver detalle</button></td>
+                    <td>
+                      <div className="catalog-row-actions">
+                        <button className="ghost-btn" onClick={() => handleOpenDetail(activeCatalog, record)}>Ver detalle</button>
+                        {activeCatalog === 'establecimientos' && isPlatformSuperAdmin ? (
+                          <button className="ghost-btn" onClick={() => setEstablishmentModal({ establishment: record })}>
+                            Editar
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {!selected.records.length ? <tr><td colSpan={catalogColumns[activeCatalog].length + 1}>No hay registros para mostrar.</td></tr> : null}
               </tbody>
             </table>
@@ -1309,6 +1331,30 @@ function App() {
     </div>
   );
 
+  const activeMenuItem = session.user?.menu?.find((item) => item.key === activeTab);
+
+  const renderCustomModule = (item) => (
+    <div className="panel-card custom-module-panel">
+      <div className="section-header">
+        <div>
+          <span className="eyebrow">Módulo personalizado</span>
+          <h3>{item.label}</h3>
+          <small>{item.description || 'Módulo habilitado desde el catálogo de recursos.'}</small>
+        </div>
+        <span className="status-pill">Activo</span>
+      </div>
+      <div className="custom-module-grid">
+        <div className="mini-card"><span>Clave</span><strong>{item.key}</strong></div>
+        <div className="mini-card"><span>Grupo</span><strong>{item.group || 'General'}</strong></div>
+        <div className="mini-card success"><span>Estado</span><strong>Habilitado</strong></div>
+      </div>
+      <p className="login-hint">
+        Este módulo fue creado desde Recursos y aparece en el menú de los roles que lo tienen asignado.
+        Puedes ajustar sus accesos en Roles y permisos.
+      </p>
+    </div>
+  );
+
   const contentMap = {
     dashboard: renderDashboard(),
     usuarios: canAccess('usuarios') ? renderUsers() : <div className="panel-card warn">No tienes permisos para ver usuarios.</div>,
@@ -1395,7 +1441,7 @@ function App() {
           {!session.user?.id_establecimiento ? (
             <div className="panel-card warn" role="alert">Esta cuenta no tiene un establecimiento asociado. Contacta al administrador.</div>
           ) : null}
-          {contentMap[activeTab] || contentMap.dashboard}
+          {contentMap[activeTab] || (activeMenuItem ? renderCustomModule(activeMenuItem) : contentMap.dashboard)}
           {selectedDetail ? (
             <div className="detail-backdrop" role="presentation" onClick={() => setSelectedDetail(null)}>
               <section className="detail-dialog" role="dialog" aria-modal="true" aria-labelledby="detail-dialog-title" onClick={(event) => event.stopPropagation()}>
@@ -1431,6 +1477,109 @@ function App() {
             </div>
           ) : null}
         </section>
+
+        <Modal
+          open={vehicleFormOpen}
+          onClose={() => setVehicleFormOpen(false)}
+          eyebrow="Catálogo · Vehículos"
+          title="Registrar vehículo"
+          description="Asocia el vehículo a un responsable para que aparezca en su QR de residente y en los accesos."
+          size="lg"
+          footer={(
+            <>
+              <button type="button" className="rbac-btn rbac-btn-ghost" onClick={() => setVehicleFormOpen(false)}>
+                Cancelar
+              </button>
+              <button type="submit" form="vehicle-form" className="rbac-btn rbac-btn-gold">
+                Guardar vehículo
+              </button>
+            </>
+          )}
+        >
+          <form id="vehicle-form" className="rbac-form" onSubmit={handleCreateVehicle}>
+            <div className="rbac-field-grid">
+              <label className="rbac-field">
+                <span>Placa</span>
+                <input
+                  value={vehicleForm.placa}
+                  onChange={(e) => setVehicleForm((p) => ({ ...p, placa: e.target.value.toUpperCase() }))}
+                  required
+                  maxLength="15"
+                  placeholder="ABC123"
+                />
+              </label>
+              <label className="rbac-field">
+                <span>Marca</span>
+                <input
+                  value={vehicleForm.marca}
+                  onChange={(e) => setVehicleForm((p) => ({ ...p, marca: e.target.value }))}
+                  placeholder="Mazda"
+                />
+              </label>
+              <label className="rbac-field">
+                <span>Modelo</span>
+                <input
+                  value={vehicleForm.modelo}
+                  onChange={(e) => setVehicleForm((p) => ({ ...p, modelo: e.target.value }))}
+                  placeholder="CX-5"
+                />
+              </label>
+              <label className="rbac-field">
+                <span>Color</span>
+                <input
+                  value={vehicleForm.color}
+                  onChange={(e) => setVehicleForm((p) => ({ ...p, color: e.target.value }))}
+                  placeholder="Gris"
+                />
+              </label>
+              {session.user?.funcionalidades?.rfid ? (
+                <label className="rbac-field">
+                  <span>Código RFID (opcional)</span>
+                  <input
+                    value={vehicleForm.codigo_rfid}
+                    onChange={(e) => setVehicleForm((p) => ({ ...p, codigo_rfid: e.target.value.trim() }))}
+                    maxLength="100"
+                  />
+                </label>
+              ) : null}
+              <label className="rbac-field">
+                <span>Responsable / residente</span>
+                <select
+                  value={vehicleForm.id_responsable}
+                  onChange={(e) => setVehicleForm((p) => ({ ...p, id_responsable: e.target.value }))}
+                >
+                  <option value="">Sin responsable</option>
+                  {catalogData.responsables.map((person) => (
+                    <option key={person.id_responsable} value={person.id_responsable}>
+                      {person.nombre}{person.departamento_unidad ? ` · ${person.departamento_unidad}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="rbac-field">
+                <span>Autorización</span>
+                <select
+                  value={vehicleForm.tipo_autorizacion}
+                  onChange={(e) => setVehicleForm((p) => ({ ...p, tipo_autorizacion: e.target.value }))}
+                >
+                  <option value="AUTORIZADO">Residente autorizado</option>
+                  <option value="VISITANTE">Visitante</option>
+                  <option value="RESTRINGIDO">Restringido</option>
+                </select>
+              </label>
+            </div>
+          </form>
+        </Modal>
+
+        {establishmentModal ? (
+          <EstablishmentModal
+            open
+            establishment={establishmentModal.establishment || null}
+            plans={catalogData.planes}
+            onClose={() => setEstablishmentModal(null)}
+            onSaved={handleEstablishmentSaved}
+          />
+        ) : null}
       </main>
     </div>
   );

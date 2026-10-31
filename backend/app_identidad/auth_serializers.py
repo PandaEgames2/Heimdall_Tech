@@ -1,5 +1,5 @@
 from django.contrib.auth import authenticate, get_user_model
-from django.contrib.auth.hashers import check_password, get_hasher, identify_hasher, make_password
+from django.contrib.auth.hashers import make_password, verify_password
 from django.contrib.auth.models import AnonymousUser
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
@@ -136,22 +136,17 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             must_update = False
             if password_hash:
                 try:
-                    matches = check_password(password, password_hash)
-                    # Scrypt.verify() devuelve bool, mientras que PBKDF2
-                    # devuelve (bool, must_update). Detectamos la migración
-                    # comparando el algoritmo, no la forma del retorno.
-                    preferred = get_hasher("default")
-                    must_update = (
-                        matches
-                        and identify_hasher(password_hash).algorithm != preferred.algorithm
-                    )
+                    # verify_password devuelve (coincide, debe_rehashear) y
+                    # compara también los parámetros del hasher (scrypt p=5
+                    # antiguo → scrypt p=1 rápido).
+                    matches, must_update = verify_password(password, password_hash)
                 except Exception:
                     matches = False
             if not matches:
                 raise AuthenticationFailed("Credenciales inválidas.")
             if must_update:
-                # Migra PBKDF2/iteraciones antiguas al hasher preferido
-                # (scrypt) en el primer login exitoso.
+                # Migra PBKDF2, scrypt p=5 y otros costes antiguos al hasher
+                # preferido en el primer login exitoso.
                 usuario.password_hash = make_password(password)
                 usuario.save(update_fields=["password_hash"])
             user = _ensure_django_user_from_usuario(usuario, password)

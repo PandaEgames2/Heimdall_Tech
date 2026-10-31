@@ -33,3 +33,14 @@ class EstablecimientoSerializer(serializers.ModelSerializer):
             "estado",
             "fecha_registro",
         )
+
+    def validate_nombre(self, value):
+        normalized = (value or "").strip()
+        if not normalized:
+            raise serializers.ValidationError("El nombre del establecimiento es obligatorio.")
+        return normalized
+
+    def validate_id_plan(self, plan):
+        if plan is not None and not plan.estado:
+            raise serializers.ValidationError("El plan seleccionado está inactivo.")
+        return plan

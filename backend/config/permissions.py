@@ -59,6 +59,12 @@ def _allows_write(request, access, module):
 
     if request.method in SAFE_METHODS:
         return True
+    # El QR de residente y sus invitaciones son operaciones personales, no
+    # edición administrativa. El rol Residente es de solo lectura sobre el
+    # establecimiento, pero debe poder generar/renovar su QR y revocar sus
+    # propias invitaciones. El módulo ya se validó contra permisos_efectivos.
+    if module == "mi_qr":
+        return True
     if access.get("solo_lectura"):
         return False
     if request.method == "DELETE":

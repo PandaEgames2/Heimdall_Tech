@@ -3,7 +3,12 @@
 import json
 import os
 
-from django.contrib.auth.hashers import check_password, identify_hasher, make_password
+from django.contrib.auth.hashers import (
+    get_hasher,
+    identify_hasher,
+    make_password,
+    verify_password,
+)
 from django.core.management.base import BaseCommand
 from django.db import connection
 
@@ -45,7 +50,16 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         demo_password = os.getenv("HEIMDALL_DEMO_PASSWORD", "Heimdall#2026")
-        password_hash = make_password(demo_password)
+        preferred = get_hasher("default")
+        password_hash = ""
+
+        def get_password_hash():
+            """Genera el hash una sola vez, sólo si hay algo que insertar/migrar."""
+
+            nonlocal password_hash
+            if not password_hash:
+                password_hash = make_password(demo_password)
+            return password_hash
 
         # Todas las cuentas del seed comparten la contraseña demo. Incluimos
         # las cuentas de edificio para reparar los hashes legacy que quedaron
@@ -92,6 +106,7 @@ class Command(BaseCommand):
                     ],
                 )
 
+            existing_users = []
             for establecimiento_id, rol_id, nombre, correo in seed_users:
                 cursor.execute(
                     "SELECT id_usuario, password_hash FROM USUARIO WHERE correo = %s LIMIT 1",
@@ -99,28 +114,51 @@ class Command(BaseCommand):
                 )
                 row = cursor.fetchone()
                 if row:
-                    existing_hash = str(row[1] or "")
-                    # Repara hashes inválidos, vacíos o que no correspondan a la
-                    # contraseña demo. Con --reset-passwords también migra los
-                    # válidos al hasher preferido.
-                    password_ok = False
-                    if existing_hash and _is_valid_password_hash(existing_hash):
-                        try:
-                            password_ok = bool(check_password(demo_password, existing_hash))
-                        except Exception:
-                            password_ok = False
-                    if options["reset_passwords"] or not password_ok:
-                        cursor.execute(
-                            "UPDATE USUARIO SET password_hash = %s WHERE id_usuario = %s",
-                            [password_hash, row[0]],
-                        )
+                    existing_users.append((row[0], str(row[1] or "")))
                     continue
                 cursor.execute(
                     """
                     INSERT INTO USUARIO (id_establecimiento, id_rol, nombre, correo, password_hash, estado)
                     VALUES (%s, %s, %s, %s, %s, TRUE)
                     """,
-                    [establecimiento_id, rol_id, nombre, correo, password_hash],
+                    [establecimiento_id, rol_id, nombre, correo, get_password_hash()],
+                )
+
+            # Repara hashes inválidos, contraseñas cambiadas y hashes con
+            # parámetros antiguos (PBKDF2 1M, scrypt parallelism=5). Se agrupa
+            # por hash para verificar una sola vez las cuentas que comparten
+            # credenciales demo; así el arranque no encadena 13 scrypt lentos.
+            pending_hash_updates = []
+            password_ok_cache: dict[str, bool] = {}
+            for usuario_id, existing_hash in existing_users:
+                if options["reset_passwords"] or not _is_valid_password_hash(existing_hash):
+                    pending_hash_updates.append(usuario_id)
+                    continue
+                try:
+                    hasher = identify_hasher(existing_hash)
+                    must_update = (
+                        hasher.algorithm != preferred.algorithm
+                        or preferred.must_update(existing_hash)
+                    )
+                except Exception:
+                    must_update = True
+                if must_update:
+                    pending_hash_updates.append(usuario_id)
+                    continue
+                if existing_hash not in password_ok_cache:
+                    try:
+                        password_ok_cache[existing_hash] = bool(
+                            verify_password(demo_password, existing_hash)[0]
+                        )
+                    except Exception:
+                        password_ok_cache[existing_hash] = False
+                if not password_ok_cache[existing_hash]:
+                    pending_hash_updates.append(usuario_id)
+            if pending_hash_updates:
+                new_hash = get_password_hash()
+                cursor.executemany(
+                    "UPDATE USUARIO SET password_hash = %s WHERE id_usuario = %s",
+                    [(new_hash, usuario_id) for usuario_id in pending_hash_updates],
                 )
 
             # El anfitrión necesita un registro de responsable para que la unidad

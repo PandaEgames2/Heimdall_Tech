@@ -101,7 +101,7 @@ export default function ResourceManagement({ isSuperAdmin = false, onResourcesCh
 
   if (!isSuperAdmin) {
     return (
-      <div className="rbac-card">
+      <div className="rbac-card rbac-card-dark">
         <div className="rbac-empty">
           <strong>Acceso restringido</strong>
           <p>La administración del catálogo de recursos es exclusiva del Super Admin.</p>
@@ -111,7 +111,7 @@ export default function ResourceManagement({ isSuperAdmin = false, onResourcesCh
   }
 
   return (
-    <div className="rbac-card">
+    <div className="rbac-card rbac-card-dark">
       <header className="rbac-card-header">
         <div>
           <span className="rbac-eyebrow">RBAC · Catálogo de recursos</span>
