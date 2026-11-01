@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../../lib/api';
-import ConfirmModal from './ConfirmModal';
 import ResourceModal from './ResourceModal';
+import Modal from '../../components/Modal';
 
 const PAGE_SIZE = 10;
 
@@ -24,6 +24,7 @@ export default function ResourceManagement({ isSuperAdmin = false, onResourcesCh
   const [page, setPage] = useState(1);
   const [modalState, setModalState] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletePassword, setDeletePassword] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   const loadResources = useCallback(async () => {
@@ -87,8 +88,12 @@ export default function ResourceManagement({ isSuperAdmin = false, onResourcesCh
     setDeleting(true);
     setError('');
     try {
-      await apiFetch(`/identidad/recursos/${deleteTarget.id_recurso}/`, { method: 'DELETE' });
+      await apiFetch(`/identidad/recursos/${deleteTarget.id_recurso}/`, {
+        method: 'DELETE',
+        headers: { 'X-Resource-Delete-Password': deletePassword },
+      });
       setDeleteTarget(null);
+      setDeletePassword('');
       await loadResources();
       onResourcesChanged?.();
     } catch (deleteError) {
@@ -264,23 +269,55 @@ export default function ResourceManagement({ isSuperAdmin = false, onResourcesCh
       ) : null}
 
       {deleteTarget ? (
-        <ConfirmModal
+        <Modal
           open
+          onClose={() => { setDeleteTarget(null); setDeletePassword(''); }}
           eyebrow="Eliminar recurso"
           title={`¿Eliminar “${deleteTarget.nombre}”?`}
-          description="El recurso se borrará del catálogo RBAC de forma permanente."
-          details={(
-            <ul>
-              <li><strong>Clave:</strong> <code>{deleteTarget.clave}</code></li>
-              <li><strong>Tipo:</strong> {deleteTarget.tipo === 'accion' ? 'Acción' : 'Módulo'}</li>
-              <li><strong>Asignaciones:</strong> {deleteTarget.roles_count} rol(es)</li>
-            </ul>
+          description="Ingresa la contraseña de eliminación para confirmar."
+          size="sm"
+          theme="dark"
+          footer={(
+            <>
+              <button type="button" className="rbac-btn rbac-btn-ghost" onClick={() => { setDeleteTarget(null); setDeletePassword(''); }} disabled={deleting}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="rbac-btn rbac-btn-danger"
+                onClick={confirmDelete}
+                disabled={deleting || !deletePassword}
+              >
+                {deleting ? 'Procesando…' : 'Eliminar recurso'}
+              </button>
+            </>
           )}
-          confirmLabel="Eliminar recurso"
-          loading={deleting}
-          onConfirm={confirmDelete}
-          onClose={() => setDeleteTarget(null)}
-        />
+        >
+          <div className="rbac-confirm rbac-confirm-danger">
+            <span className="rbac-confirm-icon" aria-hidden="true">!</span>
+            <div>
+              <ul>
+                <li><strong>Clave:</strong> <code>{deleteTarget.clave}</code></li>
+                <li><strong>Tipo:</strong> {deleteTarget.tipo === 'accion' ? 'Acción' : 'Módulo'}</li>
+                <li><strong>Asignaciones:</strong> {deleteTarget.roles_count} rol(es)</li>
+              </ul>
+              <div style={{ marginTop: 16 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span>Contraseña de eliminación</span>
+                  <input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    required
+                    placeholder="Miacarol@2025"
+                    autoComplete="current-password"
+                  />
+                  <p className="rbac-confirm-note">Solo el Super Admin conoce esta contraseña.</p>
+                </label>
+              </div>
+            </div>
+          </div>
+        </Modal>
       ) : null}
     </div>
   );

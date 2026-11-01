@@ -17,7 +17,7 @@ from config.rbac import (
 )
 from config.tenant_utils import RESIDENTE_ROL_ID, SUPER_ADMIN_ROL_ID, get_usuario_perfil, is_platform_superadmin
 
-from .models import Recurso, Rol, RolHasRecurso, Usuario, UsuarioHasRol
+from .models import Recurso, Rol, RolHasRecurso, Usuario, UsuarioHasRol, AuditLog
 
 User = get_user_model()
 
@@ -338,8 +338,40 @@ class UsuarioResumenSerializer(serializers.ModelSerializer):
         fields = ("id_usuario", "nombre", "correo", "estado")
 
 
+class AuditLogSerializer(serializers.ModelSerializer):
+    """Serializador para el registro de auditoría."""
+
+    usuario_nombre = serializers.SerializerMethodField()
+    usuario_correo = serializers.SerializerMethodField()
+    rol_nombre = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AuditLog
+        fields = (
+            "id_auditoria",
+            "id_usuario",
+            "usuario_nombre",
+            "usuario_correo",
+            "rol_nombre",
+            "accion",
+            "recurso_afectado",
+            "descripcion",
+            "ip_origen",
+            "fecha",
+        )
+        read_only_fields = fields
+
+    def get_usuario_nombre(self, obj):
+        return obj.id_usuario.nombre if obj.id_usuario else None
+
+    def get_usuario_correo(self, obj):
+        return obj.id_usuario.correo if obj.id_usuario else None
+
+    def get_rol_nombre(self, obj):
+        return obj.id_usuario.id_rol.nombre if obj.id_usuario and obj.id_usuario.id_rol else None
+
+
 class UsuarioSerializer(serializers.ModelSerializer):
-    rol = RolSerializer(source="id_rol", read_only=True)
     roles = serializers.SerializerMethodField()
     roles_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
@@ -360,7 +392,6 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "id_usuario",
             "id_establecimiento",
             "id_rol",
-            "rol",
             "roles",
             "roles_ids",
             "nombre",

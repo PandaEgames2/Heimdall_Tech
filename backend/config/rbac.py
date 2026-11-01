@@ -79,6 +79,12 @@ MODULE_PERMISSIONS = (
         "group": "Sistema",
         "description": "Panel de seguridad, auditoría y estado del sistema.",
     },
+    {
+        "key": "auditoría",
+        "label": "Auditoría",
+        "group": "Sistema",
+        "description": "Registro de actividad de usuarios y constancia de acciones en el sistema.",
+    },
 )
 
 ACTION_PERMISSIONS = (
@@ -219,7 +225,7 @@ MENU_DEFINITIONS = (
         "label": "Recursos",
         "group": "Administración",
         "icon": "recursos",
-        "superadmin_only": True,
+        "superadmin_only": False,
     },
     {
         "key": "catalogos",
@@ -241,6 +247,13 @@ MENU_DEFINITIONS = (
         "group": "Sistema",
         "icon": "seguridad",
         "superadmin_only": False,
+    },
+    {
+        "key": "auditoría",
+        "label": "Auditoría",
+        "group": "Sistema",
+        "icon": "auditoría",
+        "superadmin_only": True,
     },
 )
 

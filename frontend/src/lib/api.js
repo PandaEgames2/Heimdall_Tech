@@ -14,14 +14,24 @@ export const setAccessToken = (token) => {
 const parseResponse = async (response) => {
   const text = await response.text();
   if (!text) return {};
+  
+  // Detectar respuestas HTML (páginas de error de Django, etc.)
+  const trimmed = text.trim();
+  if (trimmed.startsWith('<') && (trimmed.includes('<!DOCTYPE') || trimmed.includes('<html') || trimmed.includes('<body'))) {
+    return { _htmlError: true, status: response.status, _raw: 'Error de conexión con el servidor' };
+  }
+  
   try {
     return JSON.parse(text);
   } catch {
-    return { raw: text };
+    return { _htmlError: true, status: response.status, _raw: 'Error de conexión con el servidor' };
   }
 };
 
 const apiErrorMessage = (payload, fallback) => {
+  if (payload?._htmlError) {
+    return 'Error de conexión con el servidor';
+  }
   const body = payload?.message ?? payload;
   if (typeof body === 'string') return body;
   if (body?.detail) return body.detail;

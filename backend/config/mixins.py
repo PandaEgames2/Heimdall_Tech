@@ -1,7 +1,7 @@
 from django.utils.translation import gettext_lazy as _
 from rest_framework.exceptions import ValidationError
 
-from config.tenant_utils import assert_establecimiento_access
+from config.tenant_utils import assert_establecimiento_access, is_platform_superadmin
 
 
 class EstablecimientoQueryParamMixin:
@@ -16,7 +16,10 @@ class EstablecimientoQueryParamMixin:
 
     def get_establecimiento_id(self):
         raw = self.request.query_params.get(self.establecimiento_param)
+        # Super Admin puede omitir el parámetro (visibilidad global)
         if not raw:
+            if is_platform_superadmin(self.request.user):
+                return None
             raise ValidationError(
                 {
                     self.establecimiento_param: _(
@@ -42,7 +45,16 @@ class EstablecimientoQueryParamMixin:
                 model.get_field("id_establecimiento")
             except Exception:
                 return qs
-        if self.action in ("list", "retrieve", "create", "update", "partial_update", "destroy"):
+        # Si es Super Admin, no exigir id_establecimiento (visibilidad global)
+        if is_platform_superadmin(self.request.user):
+            est_id = self.request.query_params.get(self.establecimiento_param)
+            if est_id:
+                try:
+                    est_id_int = int(est_id)
+                    qs = qs.filter(id_establecimiento_id=est_id_int)
+                except (TypeError, ValueError):
+                    pass
+        elif self.action in ("list", "retrieve", "create", "update", "partial_update", "destroy"):
             est_id = self.get_establecimiento_id()
             assert_establecimiento_access(self.request, est_id)
             # Scope object lookup for every action. This prevents a valid tenant
@@ -57,6 +69,10 @@ class EstablecimientoQueryParamMixin:
         try:
             model._meta.get_field("id_establecimiento")
         except Exception:
+            return
+
+        # Super Admin puede crear sin establecimiento (global)
+        if is_platform_superadmin(self.request.user):
             return
 
         expected_id = self.get_establecimiento_id()

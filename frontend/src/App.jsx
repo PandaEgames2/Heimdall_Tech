@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserQRCodeReader } from '@zxing/browser';
 import { QRCodeSVG } from 'qrcode.react';
 import Sidebar from './components/Sidebar';
@@ -83,74 +83,6 @@ function QRScanner({ onDetected }) {
       <button type="button" className="ghost-btn" onClick={() => { setCameraError(''); setActive((value) => !value); }}>
         {active ? 'Detener cámara' : 'Escanear QR con cámara'}
       </button>
-    </div>
-  );
-}
-
-function PlateCamera({ onCapture, processing }) {
-  const videoRef = useRef(null);
-  const [cameraError, setCameraError] = useState('');
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    let stream;
-    let cancelled = false;
-    const startCamera = async () => {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraError('Para abrir la cámara, usa localhost o una conexión HTTPS. También puedes registrar la placa manualmente en Control de acceso.');
-        return;
-      }
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setReady(true);
-      } catch (error) {
-        setCameraError(error?.name === 'NotAllowedError'
-          ? 'No se concedió permiso para la cámara. Habilítalo en el navegador o registra la placa manualmente.'
-          : 'No se pudo iniciar la cámara. Comprueba que no esté siendo usada por otra aplicación.');
-      }
-    };
-    startCamera();
-    return () => {
-      cancelled = true;
-      stream?.getTracks().forEach((track) => track.stop());
-    };
-  }, []);
-
-  const capture = () => {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    canvas.toBlob((blob) => {
-      if (blob) onCapture(blob);
-      else setCameraError('No se pudo tomar la captura. Intenta nuevamente.');
-    }, 'image/jpeg', 0.9);
-  };
-
-  return (
-    <div className="plate-camera">
-      {cameraError ? <div className="camera-message" role="status">{cameraError}</div> : null}
-      <div className="plate-camera-view">
-        <video ref={videoRef} autoPlay playsInline muted aria-label="Vista previa de cámara para placas" />
-        <div className="plate-camera-guide"><span>Centra la placa dentro del marco</span></div>
-      </div>
-      <div className="plate-camera-actions">
-        <span className={`camera-ready ${ready ? 'is-ready' : ''}`}>{ready ? 'Cámara lista' : 'Conectando cámara…'}</span>
-        <button type="button" className="primary-btn" onClick={capture} disabled={!ready || processing}>
-          {processing ? 'Analizando…' : 'Capturar y reconocer placa'}
-        </button>
-      </div>
     </div>
   );
 }
@@ -344,8 +276,6 @@ function App() {
   const [scanResult, setScanResult] = useState(null);
   const [scanError, setScanError] = useState('');
   const [lprProcessing, setLprProcessing] = useState(false);
-  const [lprError, setLprError] = useState('');
-  const [lprNotice, setLprNotice] = useState('');
   const [lprResult, setLprResult] = useState(null);
   const [residentVehicles, setResidentVehicles] = useState([]);
   const [residentQr, setResidentQr] = useState(null);
@@ -366,6 +296,22 @@ function App() {
     incidenciasCount: 0,
     reconocimientosCount: 0,
   });
+  const [auditData, setAuditData] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditFilters, setAuditFilters] = useState({ accion: '', usuario: '', fecha_desde: '', fecha_hasta: '' });
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [passwordChangeForm, setPasswordChangeForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
+  const [passwordChangeMsg, setPasswordChangeMsg] = useState({ text: '', type: 'info' });
+  const lprVideoRef = useRef(null);
+  const [lprCameraReady, setLprCameraReady] = useState(false);
+  const [lprCameraError, setLprCameraError] = useState('');
+  const [resourceDeleteOpen, setResourceDeleteOpen] = useState(null);
+  const [resourceDeletePassword, setResourceDeletePassword] = useState('');
+  const [lprCurrentDetection, setLprCurrentDetection] = useState(null);
+  const [lprCurrentPlate, setLprCurrentPlate] = useState(null);
+  const [ultimasLecturas, setUltimasLecturas] = useState([]);
+  const [camaraSeleccionada, setCamaraSeleccionada] = useState('principal');
+  const [toasts, setToasts] = useState([]);
 
   const isPlatformSuperAdmin = Boolean(session.user?.is_platform_superadmin);
   const roleIds = (session.user?.roles_ids || []).map(Number);
@@ -473,6 +419,170 @@ function App() {
     };
   }, []);
 
+  // Inicializar cámara LPR cuando la vista de cámaras esté activa
+  useEffect(() => {
+    if (activeTab !== 'camaras') return;
+    const video = lprVideoRef.current;
+    if (!video) return;
+    let stream;
+    let cancelled = false;
+    const startCamera = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setLprCameraError('Este navegador no permite acceso a la cámara.');
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        video.srcObject = stream;
+        await video.play();
+        setLprCameraReady(true);
+        setLprCameraError('');
+      } catch (error) {
+        setLprCameraReady(false);
+        setLprCameraError(error?.name === 'NotAllowedError'
+          ? 'No se concedió permiso para la cámara. Habilítalo en el navegador o registra la placa manualmente.'
+          : 'No se pudo iniciar la cámara.');
+      }
+    };
+    startCamera();
+    return () => {
+      cancelled = true;
+      stream?.getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
+      setLprCameraReady(false);
+    };
+  }, [activeTab]);
+
+  // Simulación de detección IA en tiempo real para demostración comercial
+  useEffect(() => {
+    if (!lprCameraReady || lprProcessing) return;
+
+    const detectionInterval = setInterval(() => {
+      const mockPlacas = ['BRE-8022', 'ABC-1234', 'XYZ-5678', 'LPR-9012', 'DEM-3456'];
+      const mockEstados = ['Autorizado', 'Visitante', 'Prohibido'];
+
+      const placaMock = mockPlacas[Math.floor(Math.random() * mockPlacas.length)];
+      const estadoMock = mockEstados[Math.floor(Math.random() * mockEstados.length)];
+      const confianzaMock = (Math.random() * 90 + 70).toFixed(1);
+
+      // Generar bounding box aleatorio dentro del video (porcentajes)
+      const x = Math.round(Math.random() * 60);
+      const y = Math.round(Math.random() * 40);
+
+      setLprCurrentDetection({
+        x,
+        y,
+        width: 200,
+        height: 80,
+      });
+
+      setLprCurrentPlate({
+        placa: placaMock,
+        confianza: parseFloat(confianzaMock),
+        validado: Math.random() > 0.3,
+      });
+
+      // Agregar al historial de lecturas
+      setUltimasLecturas((prev) => {
+        const nueva = {
+          id: Date.now(),
+          placa: placaMock,
+          fecha: new Date(),
+          tipo_estado: `estado-${estadoMock.toLowerCase()}`,
+          etiqueta_estado: estadoMock,
+        };
+        const actualizado = [nueva, ...prev].slice(0, 10);
+        return actualizado;
+      });
+    }, 15000);
+
+    return () => clearInterval(detectionInterval);
+  }, [lprCameraReady, lprProcessing]);
+
+  const loadAuditData = useCallback(async () => {
+    if (!isPlatformSuperAdmin) return;
+    setAuditLoading(true);
+    try {
+      const query = new URLSearchParams();
+      if (auditFilters.accion) query.set('accion', auditFilters.accion);
+      if (auditFilters.usuario) query.set('usuario', auditFilters.usuario);
+      if (auditFilters.fecha_desde) query.set('fecha_desde', auditFilters.fecha_desde);
+      if (auditFilters.fecha_hasta) query.set('fecha_hasta', auditFilters.fecha_hasta);
+      const url = `/identidad/auditoria/${query.toString() ? '?' + query.toString() : ''}`;
+      const data = await apiFetch(url);
+      setAuditData(Array.isArray(data) ? data : data.results || []);
+    } catch (auditError) {
+      setAuditData([]);
+      setError(auditError.message || 'No se pudieron cargar los registros de auditoría.');
+      if (auditError.message.includes('servidor') || auditError.message.includes('500')) {
+        showToast('Error del servidor', auditError.message, 'error');
+      }
+    } finally {
+      setAuditLoading(false);
+    }
+  }, [isPlatformSuperAdmin, auditFilters.accion, auditFilters.usuario, auditFilters.fecha_desde, auditFilters.fecha_hasta]);
+
+  useEffect(() => {
+    if (activeTab === 'auditoria') {
+      loadAuditData();
+    }
+  }, [activeTab, loadAuditData, auditFilters.accion, auditFilters.usuario, auditFilters.fecha_desde, auditFilters.fecha_hasta]);
+
+  // Cambio de contraseña por el usuario
+  const handleChangePassword = async (event) => {
+    event.preventDefault();
+    setPasswordChangeMsg({ text: '', type: 'info' });
+    const { current_password, new_password, confirm_password } = passwordChangeForm;
+    try {
+      await apiFetch('/identidad/auth/change-password/', {
+        method: 'POST',
+        body: JSON.stringify({ current_password, new_password, confirm_password }),
+      });
+      setPasswordChangeMsg({ text: 'Contraseña actualizada correctamente. Inicia sesión de nuevo con la nueva contraseña.', type: 'success' });
+      setPasswordChangeForm({ current_password: '', new_password: '', confirm_password: '' });
+    } catch (pwError) {
+      setPasswordChangeMsg({ text: pwError.message || 'No se pudo cambiar la contraseña.', type: 'error' });
+    }
+  };
+
+  // Eliminar recurso con contraseña (Super Admin)
+  const handleDeleteResource = async (event) => {
+    event.preventDefault();
+    if (!resourceDeleteOpen) return;
+    try {
+      await apiFetch(`/identidad/recursos/${resourceDeleteOpen.id_recurso}/`, {
+        method: 'DELETE',
+        headers: { 'X-Resource-Delete-Password': resourceDeletePassword },
+      });
+      setResourceDeleteOpen(null);
+      setResourceDeletePassword('');
+      setError('');
+      // Recargar catálogo de recursos si está activo
+      if (activeTab === 'recursos') {
+        // El componente se recargará al navegar
+      }
+    } catch (delError) {
+      setError(delError.message || 'No se pudo eliminar el recurso.');
+      showToast('Error', delError.message || 'No se pudo eliminar el recurso.', 'error');
+    }
+  };
+
+  // Sistema de notificaciones Toast
+  const showToast = (title, message, type = 'error') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, title, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, type === 'error' ? 6000 : 4000);
+  };
+
   const sessionUserId = session.user?.id_usuario ?? session.user?.id;
 
   useEffect(() => {
@@ -524,7 +634,8 @@ function App() {
     if (!session.user) return undefined;
 
     const establecimientoId = session.user?.id_establecimiento;
-    if (!establecimientoId) {
+    // Super Admin: cargar vista global sin filtro de establecimiento
+    if (!establecimientoId && !isPlatformSuperAdmin) {
       return undefined;
     }
 
@@ -532,25 +643,27 @@ function App() {
       try {
         const canReadReports = effectivePermissions.includes('reportes');
         const canReadSecurity = effectivePermissions.includes('seguridad');
-        const dataRequests = canReadReports ? [
-          ['movimientos', authFetch(`/operaciones/movimientos/?id_establecimiento=${establecimientoId}`)],
-          ['incidencias', authFetch(`/operaciones/incidencias/?id_establecimiento=${establecimientoId}`)],
-        ] : canReadSecurity ? [
-          ['incidencias', authFetch(`/operaciones/incidencias/?id_establecimiento=${establecimientoId}&permiso=seguridad`)],
-        ] : [];
+        const dataRequests = [];
+        // Super Admin consulta todos los establecimientos (sin filtro de tenant)
+        if (canReadReports) {
+          dataRequests.push(['movimientos', authFetch(`/operaciones/movimientos/?id_establecimiento=${establecimientoId || ''}`)]);
+          dataRequests.push(['incidencias', authFetch(`/operaciones/incidencias/?id_establecimiento=${establecimientoId || ''}`)]);
+        } else if (canReadSecurity) {
+          dataRequests.push(['incidencias', authFetch(`/operaciones/incidencias/?id_establecimiento=${establecimientoId || ''}&permiso=seguridad`)]);
+        }
         if (canReadReports && (isPlatformSuperAdmin || session.user?.funcionalidades?.lpr)) {
-          dataRequests.push(['reconocimientos', authFetch(`/inteligencia/reconocimientos/?id_establecimiento=${establecimientoId}`)]);
+          dataRequests.push(['reconocimientos', authFetch(`/inteligencia/reconocimientos/?id_establecimiento=${establecimientoId || ''}`)]);
         }
         if (effectivePermissions.includes('catalogos')) {
           dataRequests.push(['planes', authFetch('/empresas/planes/')]);
           dataRequests.push(['establecimientos', authFetch('/empresas/establecimientos/')]);
-          dataRequests.push(['vehiculos', authFetch(`/operaciones/vehiculos/?id_establecimiento=${establecimientoId}`)]);
-          dataRequests.push(['responsables', authFetch(`/operaciones/responsables/?id_establecimiento=${establecimientoId}`)]);
+          dataRequests.push(['vehiculos', authFetch(`/operaciones/vehiculos/?id_establecimiento=${establecimientoId || ''}`)]);
+          dataRequests.push(['responsables', authFetch(`/operaciones/responsables/?id_establecimiento=${establecimientoId || ''}`)]);
         } else if (effectivePermissions.includes('accesos')) {
-          dataRequests.push(['vehiculos', authFetch(`/operaciones/vehiculos/?id_establecimiento=${establecimientoId}&permiso=accesos`)]);
+          dataRequests.push(['vehiculos', authFetch(`/operaciones/vehiculos/?id_establecimiento=${establecimientoId || ''}&permiso=accesos`)]);
         }
         if (effectivePermissions.includes('accesos')) {
-          dataRequests.push(['invitaciones', authFetch(`/operaciones/invitaciones-visitantes/?id_establecimiento=${establecimientoId}`)]);
+          dataRequests.push(['invitaciones', authFetch(`/operaciones/invitaciones-visitantes/?id_establecimiento=${establecimientoId || ''}`)]);
         }
         const responses = await Promise.all(dataRequests.map(([, request]) => request));
         const failedResponse = responses.find((response) => !response.ok);
@@ -729,7 +842,7 @@ function App() {
   const handleCreateVehicle = async (event) => {
     event.preventDefault();
     const establecimientoId = session.user?.id_establecimiento;
-    if (!establecimientoId) return setError('La cuenta no tiene un establecimiento asociado.');
+    if (!establecimientoId && !isPlatformSuperAdmin) return setError('La cuenta no tiene un establecimiento asociado.');
     try {
       const created = await apiFetch(`/operaciones/vehiculos/?id_establecimiento=${establecimientoId}`, {
         method: 'POST',
@@ -827,7 +940,7 @@ function App() {
 
   const handleScanCode = async (rawToken) => {
     const establishmentId = session.user?.id_establecimiento;
-    if (!establishmentId) return setScanError('La cuenta no tiene un establecimiento asociado.');
+    if (!establishmentId && !isPlatformSuperAdmin) return setScanError('La cuenta no tiene un establecimiento asociado.');
     const cleanCode = rawToken.trim();
     // Resident fallback codes are six digits. Route these to the resident
     // validator even if the dropdown was left on visitor by mistake.
@@ -861,13 +974,11 @@ function App() {
 
   const handlePlateCapture = async (imageBlob) => {
     const establishmentId = session.user?.id_establecimiento;
-    if (!establishmentId) {
-      setLprError('La cuenta no tiene un establecimiento asociado.');
+    if (!establishmentId && !isPlatformSuperAdmin) {
+      showToast('Error', 'La cuenta no tiene un establecimiento asociado.', 'error');
       return;
     }
     setLprProcessing(true);
-    setLprError('');
-    setLprNotice('');
     try {
       const body = new FormData();
       body.append('imagen', imageBlob, 'captura-placa.jpg');
@@ -878,7 +989,7 @@ function App() {
       });
       if (!payload.detectado || !payload.resultados?.length) {
         setLprResult(null);
-        setLprNotice(payload.mensaje || 'No se detectó una placa. Ajusta el encuadre e intenta otra vez.');
+        showToast('Sin detección', payload.mensaje || 'No se detectó una placa. Ajusta el encuadre e intenta otra vez.', 'error');
         return;
       }
       const first = payload.resultados[0];
@@ -897,10 +1008,10 @@ function App() {
           placa_leida: first.placa_detectada,
           id_vehiculo: matchedVehicle ? String(matchedVehicle.id_vehiculo) : '',
         }));
-        setLprNotice('Revisa la placa detectada. El sistema no abre el acceso automáticamente.');
+        showToast('Revisar placa', 'El sistema no abre el acceso automáticamente.', 'info');
       }
     } catch (captureError) {
-      setLprError(captureError.message || 'No se pudo procesar la placa.');
+      showToast('Error', captureError.message || 'No se pudo procesar la placa.', 'error');
     } finally {
       setLprProcessing(false);
     }
@@ -925,7 +1036,7 @@ function App() {
       return setError('La administración de este establecimiento no ha habilitado invitaciones para residentes.');
     }
     const establishmentId = session.user?.id_establecimiento;
-    if (!establishmentId) return setError('La cuenta no tiene un establecimiento asociado.');
+    if (!establishmentId && !isPlatformSuperAdmin) return setError('La cuenta no tiene un establecimiento asociado.');
     try {
       const now = new Date();
       const start = visitorForm.vigente_desde ? new Date(visitorForm.vigente_desde) : now;
@@ -981,11 +1092,12 @@ function App() {
     const establishmentId = type === 'establecimientos'
       ? record.id_establecimiento
       : session.user?.id_establecimiento;
-    if ((!establishmentId && config.tenantScoped !== false) || !id) return;
+    // Super Admin puede ver detalles sin filtro de establecimiento
+    if ((!establishmentId && config.tenantScoped !== false && !isPlatformSuperAdmin) || !id) return;
     const key = `${type}-${id}`;
     setSelectedDetail({ key, type, record, detail: null, loading: true });
     try {
-      const tenantQuery = config.tenantScoped === false ? '' : `?id_establecimiento=${establishmentId}`;
+      const tenantQuery = (config.tenantScoped === false || isPlatformSuperAdmin) ? '' : `?id_establecimiento=${establishmentId}`;
       const detail = await apiFetch(`${config.endpoint}${id}/${tenantQuery}`);
       setSelectedDetail((current) => current?.key === key
         ? { key, type, record, detail, loading: false }
@@ -1002,11 +1114,12 @@ function App() {
     const records = reportData[type];
     const count = reportData[`${type}Count`];
     const establishmentId = session.user?.id_establecimiento;
-    if (!config || !establishmentId || records.length >= count || loadingMore) return;
+    if (!config || records.length >= count || loadingMore) return;
     setLoadingMore(true);
     try {
       const page = Math.floor(records.length / 25) + 1;
-      const payload = await apiFetch(`${config.endpoint}?id_establecimiento=${establishmentId}&page=${page}`);
+      const tenantQuery = isPlatformSuperAdmin ? '' : `?id_establecimiento=${establishmentId}`;
+      const payload = await apiFetch(`${config.endpoint}${tenantQuery}&page=${page}`);
       setReportData((current) => ({
         ...current,
         [type]: [...current[type], ...normalizeListResponse(payload)],
@@ -1298,77 +1411,284 @@ function App() {
     );
   };
 
-  const renderCamaras = () => (
-    <div className="panel-card">
-      <div className="section-header">
-        <div><h3>Reconocimiento de placas</h3><small>FastALPR · detector YOLO DNN + lectura OCR mediante ONNX</small></div>
-        <div className="status-pill">{offlineMode ? 'Sin conexión' : 'Con conexión'}</div>
-      </div>
+  const renderCamaras = () => {
+    return (
+      <div className="rbac-card rbac-card-dark camara-container">
+        <header className="rbac-card-header">
+          <div>
+            <span className="rbac-eyebrow">Reconocimiento de placas</span>
+            <h3>Cámaras · LPR / IA</h3>
+            <small>FastALPR · detector YOLO DNN + lectura OCR mediante ONNX</small>
+          </div>
+          <div className="rbac-header-actions">
+            <span className="rbac-badge">{offlineMode ? 'Sin conexión' : 'Con conexión'}</span>
+            <span className="rbac-badge">{hasFeature('lpr') ? 'LPR activo' : 'LPR no incluido'}</span>
+          </div>
+        </header>
 
-      {!hasFeature('lpr') ? <div className="plan-notice">El plan {session.user?.plan?.nombre || ''} incluye control manual. LPR/IA está disponible en el plan Avanzado.</div> : <>
-        <div className="lpr-workspace">
-          <PlateCamera onCapture={handlePlateCapture} processing={lprProcessing} />
-          <aside className="lpr-result-card">
-            <span className="eyebrow">Resultado de la captura</span>
-            <strong className="lpr-latest-plate">{lprResult?.placa_detectada || latestPlate}</strong>
-            <span>Confianza: {lprResult ? `${Number(lprResult.nivel_confianza).toFixed(1)}%` : latestConfidence}</span>
-            <span>Estado: {lprResult?.resultado_ia_etiqueta || latestRecognition?.resultado_ia_etiqueta || 'Esperando captura'}</span>
-            {lprError ? <div className="error-box" role="alert">{lprError}</div> : null}
-            {lprNotice ? <div className="success-box" role="status">{lprNotice}</div> : null}
-            {lprResult?.placa_detectada && lprResult.placa_detectada !== 'SIN_LECTURA' ? <button type="button" className="ghost-btn" onClick={() => setActiveTab('accesos')}>Revisar placa en Control de acceso</button> : null}
-            <small>La lectura ayuda al vigilante; siempre debe revisar el resultado antes de registrar el ingreso.</small>
-          </aside>
-        </div>
-      </>}
-    </div>
-  );
+        {!hasFeature('lpr') ? (
+          <div className="plan-notice">
+            El plan {session.user?.plan?.nombre || ''} incluye control manual. LPR/IA está disponible en el plan Avanzado.
+          </div>
+        ) : (
+          <>
+            {/* ÁREA DE VÍDEO IZQUIERDA (60% - 2:1 proportion) */}
+            <div className="camara-video-area">
+              <div className="video-container">
+                {lprCameraError ? (
+                  <div className="camera-error-state">
+                    <svg className="warning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 6v6l4 2" />
+                    </svg>
+                    <p>{lprCameraError}</p>
+                    <button className="primary-btn rbac-btn-sm" onClick={() => setLprCameraReady(true)}>
+                      Reintentar
+                    </button>
+                  </div>
+                ) : null}
+                <div className="lpr-video-wrapper">
+                  <video
+                    ref={lprVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    aria-label="Vista previa de cámara para reconocimiento de placas"
+                    className="lpr-video-element"
+                  />
+                  <div className="lpr-detection-overlay">
+                    {/* Bounding box IA - se actualiza dinámicamente */}
+                    {lprCurrentDetection && (
+                      <div
+                        className="lpr-bounding-box"
+                        style={{
+                          left: lprCurrentDetection.x,
+                          top: lprCurrentDetection.y,
+                          width: lprCurrentDetection.width,
+                          height: lprCurrentDetection.height,
+                        }}
+                      >
+                        <span className="lpr-label">LPR</span>
+                      </div>
+                    )}
+                    {/* Tarjeta flotante de procesamiento en vivo (parte superior derecha) */}
+                    {lprCurrentPlate && (
+                      <div className="lpr-processing-card">
+                        <div className="lpr-plate-info">
+                          <strong>PATENTE: {lprCurrentPlate.placa}</strong>
+                          <div className="lpr-confidence">
+                            OCR + Confianza: {lprCurrentPlate.confianza}%
+                          </div>
+                        </div>
+                        <div className={`lpr-validation-state ${lprCurrentPlate.validado ? 'validado' : 'no-validado'}`}>
+                          {lprCurrentPlate.validado ? 'ACCESO AUTORIZADO' : 'En validación'}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Controles de cámara inferior */}
+              <div className="camara-controles">
+                <span className="camera-status">
+                  {lprCameraReady ? 'Cámara lista' : 'Conectando cámara…'}
+                </span>
+                <button
+                  type="button"
+                  className="primary-btn camara-capturar-btn"
+                  onClick={async () => {
+                    if (!lprVideoRef?.current || !lprVideoRef.current.videoWidth) {
+                      showToast('Cámara no lista', 'Conéctala o registra la placa manualmente.', 'error');
+                      return;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = lprVideoRef.current.videoWidth;
+                    canvas.height = lprVideoRef.current.videoHeight;
+                    canvas.getContext('2d').drawImage(lprVideoRef.current, 0, 0, canvas.width, canvas.height);
+                    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+                    await handlePlateCapture(blob);
+                  }}
+                  disabled={!lprCameraReady || lprProcessing}
+                >
+                  {lprProcessing ? 'Analizando…' : 'Capturar y reconocer placa'}
+                </button>
+              </div>
+            </div>
+
+            {/* PANEL LATERAL DERECHO (40%) */}
+            <div className="panel-lateral-derecho">
+              {/* Selector de cámaras */}
+              <div className="selector-camaras tarjeta-panel">
+                <div className="tarjeta-header">
+                  <h4>Selector de Cámaras</h4>
+                  <small>Alternar flujos de video</small>
+                </div>
+                <div className="selector-contenido">
+                  <select
+                    className="selector-input"
+                    value={camaraSeleccionada}
+                    onChange={(e) => setCamaraSeleccionada(e.target.value)}
+                  >
+                    <option value="principal">Cámara Acceso Principal - LPR Active</option>
+                    <option value="secundaria">Cámara Secundaria - LPR Active</option>
+                    <option value="entrada">Cámara Entrada Peatonal</option>
+                    <option value="salida">Cámara Salida Vehicular</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Área de captura con marco verde brillante */}
+              <div className="area-captura tarjeta-panel">
+                <div className="area-captura-header">
+                  <h4>Previsualización de Placa</h4>
+                  <small>Recorte y amplificación de la placa detectada</small>
+                </div>
+                <div className="area-captura-contenido">
+                  {lprResult ? (
+                    <div className="recorte-placa">
+                      <div className="marco-placa">
+                        <strong className="tipo-placa">PLACA DETECTADA</strong>
+                        <div className="numero-placa digital-font">
+                          {lprResult.placa_detectada || '—'}
+                        </div>
+                      </div>
+                      <p className="texto-asistencia">Placa detectada con éxito</p>
+                    </div>
+                  ) : (
+                    <div className="estado-vacio">
+                      <svg className="svg-vacio" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      <p>No hay placa detectada aún</p>
+                      <small>Posicione el vehículo dentro del carril de cámara</small>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Botón ACCIÓN PRIORITARIO GRANDE */}
+              <div className="boton-accion-grande">
+                <button
+                  type="button"
+                  className="btn-accion-primario"
+                  onClick={async () => {
+                    if (!lprVideoRef?.current || !lprVideoRef.current.videoWidth) {
+                      showToast('Cámara no lista', 'Conéctala o registra la placa manualmente.', 'error');
+                      return;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = lprVideoRef.current.videoWidth;
+                    canvas.height = lprVideoRef.current.videoHeight;
+                    canvas.getContext('2d').drawImage(lprVideoRef.current, 0, 0, canvas.width, canvas.height);
+                    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+                    await handlePlateCapture(blob);
+                  }}
+                  disabled={!lprCameraReady || lprProcessing}
+                  aria-label="Registrar y abrir acceso"
+                >
+                  <svg className="svg-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                  <span>REGISTRAR Y ABRIR ACCESO</span>
+                </button>
+              </div>
+
+              {/* Historial vertical de lecturas */}
+              <div className="historial-lecturas tarjeta-panel">
+                <div className="historial-header">
+                  <h4>Historial de Lecturas</h4>
+                  <small>Últimas detecciones</small>
+                </div>
+                <div className="historial-contenido">
+                  {ultimasLecturas.length === 0 ? (
+                    <div className="item-lectura historial-vacio">
+                      <svg className="svg-historial" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 18 12 12 18" />
+                      </svg>
+                      <p>Aún no hay lecturas registradas</p>
+                    </div>
+                  ) : (
+                    <div className="lista-lecturas">
+                      {ultimasLecturas.map((lectura) => (
+                        <div
+                          key={lectura.id}
+                          className={`item-lectura ${lectura.tipo_estado}`}
+                        >
+                          <div className="hora-lectura">{new Date(lectura.fecha).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</div>
+                          <div className="placa-lectura">
+                            <strong className="digital-font">{lectura.placa}</strong>
+                            <span className={`etiqueta-estado ${lectura.tipo_estado}`}>
+                              {lectura.etiqueta_estado}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
 
   const renderAccesos = () => (
-    <div className="access-workspace">
-      <div className="panel-card">
-        <div className="section-header">
-          <div><h3>Control manual de acceso</h3><small>Registra ingresos y salidas desde portería.</small></div>
-          <span className="status-pill">{session.user?.plan?.nombre || 'Plan activo'}</span>
+    <div className="rbac-card rbac-card-dark access-workspace">
+      <header className="rbac-card-header">
+        <div>
+          <span className="rbac-eyebrow">Control manual de acceso</span>
+          <h3>Ingresos y Salidas</h3>
+          <small>Registra ingresos y salidas desde portería.</small>
         </div>
-        {!hasFeature('rfid') ? <div className="plan-notice" role="status">Tu plan incluye registro manual{hasFeature('qr') ? ' y acceso QR' : ''}; RFID no está incluido. Puedes continuar con captura manual.</div> : null}
-        <form className="form-panel" onSubmit={handleCreateMovement}>
-          <div className="field-grid">
-            <label>
-              <span>Vehículo registrado</span>
-              <select value={movementForm.id_vehiculo} onChange={(e) => {
-                const chosen = catalogData.vehiculos.find((item) => String(item.id_vehiculo) === e.target.value);
-                setMovementForm((p) => ({ ...p, id_vehiculo: e.target.value, placa_leida: chosen?.placa || p.placa_leida }));
-              }}>
-                <option value="">No está registrado / visitante</option>
-                {catalogData.vehiculos.map((item) => <option key={item.id_vehiculo} value={item.id_vehiculo}>{item.placa} · {item.responsable?.nombre || 'Sin responsable'}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Placa leída o escrita</span>
-              <input value={movementForm.placa_leida} onChange={(e) => setMovementForm((p) => ({ ...p, placa_leida: e.target.value.toUpperCase() }))} required maxLength="15" placeholder="ABC-123" />
-            </label>
-            {session.user?.funcionalidades?.rfid ? <label><span>Código RFID (lector USB)</span><input value={movementForm.codigo_rfid} onChange={(e) => {
-              const code = e.target.value.trim();
-              const matched = catalogData.vehiculos.find((item) => item.codigo_rfid?.toLowerCase() === code.toLowerCase());
-              setMovementForm((p) => ({ ...p, codigo_rfid: code, id_vehiculo: matched ? String(matched.id_vehiculo) : p.id_vehiculo, placa_leida: matched?.placa || p.placa_leida }));
-            }} placeholder="Escanea la tarjeta o etiqueta" /></label> : null}
-            <label>
-              <span>Tipo de movimiento</span>
-              <select value={movementForm.tipo_movimiento} onChange={(e) => setMovementForm((p) => ({ ...p, tipo_movimiento: e.target.value }))}>
-                <option value="INGRESO">Ingreso</option><option value="SALIDA">Salida</option>
-              </select>
-            </label>
-            <label>
-              <span>Observación</span>
-              <input value={movementForm.observacion} onChange={(e) => setMovementForm((p) => ({ ...p, observacion: e.target.value }))} maxLength="255" placeholder="Motivo, visitante o nota de portería" />
-            </label>
-          </div>
-          <div className="form-actions"><button className="primary-btn" type="submit">Registrar movimiento</button></div>
-          {movementSaved ? <div className="success-box" role="status">{movementSaved}</div> : null}
-        </form>
-      </div>
+        <div className="rbac-header-actions">
+          <span className="rbac-badge">{session.user?.plan?.nombre || 'Plan activo'}</span>
+          <span className="rbac-badge">{hasFeature('rfid') ? 'RFID incluido' : 'RFID no incluido'}</span>
+        </div>
+      </header>
 
-      <div className="panel-card">
+      {!hasFeature('rfid') ? <div className="plan-notice" role="status">Tu plan incluye registro manual{hasFeature('qr') ? ' y acceso QR' : ''}; RFID no está incluido. Puedes continuar con captura manual.</div> : null}
+      <form className="form-panel" onSubmit={handleCreateMovement}>
+        <div className="field-grid">
+          <label>
+            <span>Vehículo registrado</span>
+            <select value={movementForm.id_vehiculo} onChange={(e) => {
+              const chosen = catalogData.vehiculos.find((item) => String(item.id_vehiculo) === e.target.value);
+              setMovementForm((p) => ({ ...p, id_vehiculo: e.target.value, placa_leida: chosen?.placa || p.placa_leida }));
+            }}>
+              <option value="">No está registrado / visitante</option>
+              {catalogData.vehiculos.map((item) => <option key={item.id_vehiculo} value={item.id_vehiculo}>{item.placa} · {item.responsable?.nombre || 'Sin responsable'}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Placa leída o escrita</span>
+            <input value={movementForm.placa_leida} onChange={(e) => setMovementForm((p) => ({ ...p, placa_leida: e.target.value.toUpperCase() }))} required maxLength="15" placeholder="ABC-123" />
+          </label>
+          {session.user?.funcionalidades?.rfid ? <label><span>Código RFID (lector USB)</span><input value={movementForm.codigo_rfid} onChange={(e) => {
+            const code = e.target.value.trim();
+            const matched = catalogData.vehiculos.find((item) => item.codigo_rfid?.toLowerCase() === code.toLowerCase());
+            setMovementForm((p) => ({ ...p, codigo_rfid: code, id_vehiculo: matched ? String(matched.id_vehiculo) : p.id_vehiculo, placa_leida: matched?.placa || p.placa_leida }));
+          }} placeholder="Escanea la tarjeta o etiqueta" /></label> : null}
+          <label>
+            <span>Tipo de movimiento</span>
+            <select value={movementForm.tipo_movimiento} onChange={(e) => setMovementForm((p) => ({ ...p, tipo_movimiento: e.target.value }))}>
+              <option value="INGRESO">Ingreso</option><option value="SALIDA">Salida</option>
+            </select>
+          </label>
+          <label>
+            <span>Observación</span>
+            <input value={movementForm.observacion} onChange={(e) => setMovementForm((p) => ({ ...p, observacion: e.target.value }))} maxLength="255" placeholder="Motivo, visitante o nota de portería" />
+          </label>
+        </div>
+        <div className="form-actions"><button className="primary-btn" type="submit">Registrar movimiento</button></div>
+        {movementSaved ? <div className="success-box" role="status">{movementSaved}</div> : null}
+      </form>
+
+      <div className="form-panel">
         <div className="section-header"><div><h3>Validar QR</h3><small>Escanea el QR de un residente o la invitación de un visitante.</small></div></div>
         {hasFeature('qr') ? <>
         <div className="field-grid">
@@ -1408,7 +1728,7 @@ function App() {
         </> : <div className="plan-notice" role="status">El acceso QR no está incluido en el plan {session.user?.plan?.nombre || 'actual'}. Continúa usando el registro manual.</div>}
       </div>
 
-      <div className="panel-card">
+      <div className="form-panel">
         <div className="section-header"><div><h3>Registrar incidencia</h3><small>Deja constancia de daños, novedades o intentos de acceso.</small></div></div>
         <form className="form-panel" onSubmit={handleCreateIncident}>
           <div className="field-grid">
@@ -1428,13 +1748,15 @@ function App() {
   const renderMiQr = () => {
     const qrEnabled = session.user?.funcionalidades?.qr !== false;
     return (
-      <div className="resident-workspace">
+      <div className="rbac-card rbac-card-dark resident-workspace">
         {!qrEnabled ? <div className="panel-card warn">El plan actual no incluye códigos QR.</div> : null}
-        <div className="panel-card resident-qr-card">
+        <div className="resident-qr-card">
           <div className="section-header"><div><h3>Mi QR de residente</h3><small>Se renueva automáticamente y cada código se acepta una sola vez.</small></div><span className="status-pill">{session.user?.establecimiento}</span></div>
           <label><span>Vehículo asociado</span><select value={residentQrVehicle} onChange={(e) => setResidentQrVehicle(e.target.value)}><option value="">Acceso peatonal</option>{residentVehicles.map((item) => <option key={item.id_vehiculo} value={item.id_vehiculo}>{item.placa} · {item.marca || ''}</option>)}</select></label>
           {residentQr?.token && qrEnabled ? <div className="qr-display"><QRCodeSVG value={residentQr.token} size={230} level="M" includeMargin /><p>{residentQr.residente} · {residentQr.vehiculo}</p><small>Vence: {formatDateTime(residentQr.expires_at)}</small><div className="resident-fallback-code"><span>Código rápido para dictar al vigilante</span><strong aria-label={`Código de respaldo ${residentQr.codigo_respaldo}`}>{residentQr.codigo_respaldo}</strong><small>Válido por 90 segundos y de un solo uso.</small></div></div> : <div className="empty-state">Generando el QR de acceso…</div>}
-          <button className="ghost-btn" onClick={handleRefreshResidentQR} disabled={!qrEnabled}>Actualizar QR ahora</button>
+          <div className="form-actions" style={{ justifyContent: 'center', marginTop: 16 }}>
+            <button className="ghost-btn" onClick={handleRefreshResidentQR} disabled={!qrEnabled}>Actualizar QR ahora</button>
+          </div>
         </div>
 
         <div className="panel-card">
@@ -1499,7 +1821,7 @@ function App() {
           </p>
         </div>
         <div className="rbac-header-actions">
-          <span className="rbac-badge rbac-badge-gold">Establecimiento {session.user?.id_establecimiento}</span>
+          <span className="rbac-badge rbac-badge-gold">Establecimiento {isPlatformSuperAdmin ? 'Sistema Global' : session.user?.id_establecimiento}</span>
           <span className="rbac-badge">{hasFeature('lpr') ? 'LPR activo' : 'LPR no incluido'}</span>
         </div>
       </header>
@@ -1616,6 +1938,208 @@ function App() {
     </div>
   );
 
+  const renderAuditoria = () => {
+    const totalLogs = auditData.length;
+    const porAccion = auditData.reduce((acc, log) => {
+      acc[log.accion] = (acc[log.accion] || 0) + 1;
+      return acc;
+    }, {});
+
+    return (
+      <div className="rbac-card rbac-card-dark audit-panel">
+        <header className="rbac-card-header">
+          <div>
+            <span className="rbac-eyebrow">Auditoría · Super Admin</span>
+            <h3>Registro de Actividad del Sistema</h3>
+            <small>Constancia de lo que hace cada usuario en el sistema.</small>
+          </div>
+          <div className="rbac-header-actions">
+            <span className="rbac-badge rbac-badge-gold">Solo Super Admin</span>
+            <span className="rbac-badge">{totalLogs} registros</span>
+          </div>
+        </header>
+
+        {/* Estadísticas rápidas */}
+        <div className="rbac-stats audit-stats">
+          <div className="rbac-stat">
+            <span>Total registros</span>
+            <strong>{totalLogs}</strong>
+            <small>acciones auditadas</small>
+          </div>
+          <div className="rbac-stat">
+            <span>Logins</span>
+            <strong>{porAccion.LOGIN || 0}</strong>
+            <small>inicios de sesión</small>
+          </div>
+          <div className="rbac-stat">
+            <span>Cambios</span>
+            <strong>{(porAccion.CREATE || 0) + (porAccion.UPDATE || 0) + (porAccion.DELETE || 0)}</strong>
+            <small>creaciones, actualizaciones, eliminaciones</small>
+          </div>
+          <div className="rbac-stat">
+            <span>Seguridad</span>
+            <strong>{(porAccion.PASSWORD_CHANGE || 0) + (porAccion.ROLE_ASSIGN || 0)}</strong>
+            <small>cambios de clave y roles</small>
+          </div>
+        </div>
+
+        {/* Barra de filtros */}
+        <div className="audit-toolbar">
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span>Acción</span>
+            <select value={auditFilters.accion} onChange={(e) => setAuditFilters({ ...auditFilters, accion: e.target.value })}>
+              <option value="">Todas las acciones</option>
+              <option value="LOGIN">Inicio de sesión</option>
+              <option value="LOGOUT">Cierre de sesión</option>
+              <option value="CREATE">Creación</option>
+              <option value="UPDATE">Actualización</option>
+              <option value="DELETE">Eliminación</option>
+              <option value="INVITE">Invitación</option>
+              <option value="QR_GENERATE">QR generado</option>
+              <option value="PASSWORD_CHANGE">Cambio de contraseña</option>
+              <option value="ROLE_ASSIGN">Asignación de rol</option>
+            </select>
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span>Usuario</span>
+            <input
+              value={auditFilters.usuario}
+              onChange={(e) => setAuditFilters({ ...auditFilters, usuario: e.target.value })}
+              placeholder="Correo o nombre"
+            />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span>Desde</span>
+            <input type="date" value={auditFilters.fecha_desde} onChange={(e) => setAuditFilters({ ...auditFilters, fecha_desde: e.target.value })} />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span>Hasta</span>
+            <input type="date" value={auditFilters.fecha_hasta} onChange={(e) => setAuditFilters({ ...auditFilters, fecha_hasta: e.target.value })} />
+          </label>
+          <button
+            type="button"
+            className="rbac-btn rbac-btn-ghost rbac-btn-sm"
+            onClick={() => setAuditFilters({ accion: '', usuario: '', fecha_desde: '', fecha_hasta: '' })}
+          >
+            Limpiar filtros
+          </button>
+        </div>
+
+        {auditLoading ? (
+          <div className="audit-empty">
+            <div className="audit-spinner" />
+            <p>Cargando registros de auditoría…</p>
+          </div>
+        ) : auditData.length === 0 ? (
+          <div className="audit-empty">
+            <svg className="audit-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 18 12 12 18" />
+            </svg>
+            <strong>Sin registros de auditoría</strong>
+            <p>No se encontraron actividades con los filtros aplicados.</p>
+          </div>
+        ) : (
+          <div className="audit-table-wrap">
+            <table className="audit-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Usuario</th>
+                  <th>Rol</th>
+                  <th>Acción</th>
+                  <th>Recurso</th>
+                  <th>Descripción</th>
+                  <th>IP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditData.map((log) => (
+                  <tr key={log.id_auditoria}>
+                    <td>
+                      <span className="audit-fecha">{new Date(log.fecha).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                    </td>
+                    <td>
+                      <div className="audit-user">
+                        <span className="audit-user-name">{log.usuario_nombre || '—'}</span>
+                        <span className="audit-user-email">{log.usuario_correo || '—'}</span>
+                      </div>
+                    </td>
+                    <td>{log.rol_nombre || '—'}</td>
+                    <td>
+                      <span className={`audit-badge audit-${log.accion}`}>{log.accion}</span>
+                    </td>
+                    <td>{log.recurso_afectado || '—'}</td>
+                    <td>{log.descripcion || '—'}</td>
+                    <td>{log.ip_origen || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderPasswordChange = () => (
+    <div className="rbac-card rbac-card-dark">
+      <header className="rbac-card-header">
+        <div>
+          <span className="rbac-eyebrow">Configuración de cuenta</span>
+          <h3>Cambiar mi contraseña</h3>
+          <small>Mantén tu cuenta segura con una contraseña robusta.</small>
+        </div>
+      </header>
+
+      <form className="password-change-form" onSubmit={handleChangePassword}>
+        <h4>Cambio de contraseña personal</h4>
+        <div className="field-grid" style={{ gridTemplateColumns: '1fr' }}>
+          <label>
+            <span>Contraseña actual</span>
+            <input
+              type="password"
+              value={passwordChangeForm.current_password}
+              onChange={(e) => setPasswordChangeForm({ ...passwordChangeForm, current_password: e.target.value })}
+              required
+            />
+          </label>
+          <label>
+            <span>Nueva contraseña</span>
+            <input
+              type="password"
+              value={passwordChangeForm.new_password}
+              onChange={(e) => setPasswordChangeForm({ ...passwordChangeForm, new_password: e.target.value })}
+              required
+            />
+            <small style={{ color: '#94a7bd', fontSize: '.75rem' }}>Mínimo 8 caracteres, 1 mayúscula, 1 minúscula, 1 número.</small>
+          </label>
+          <label>
+            <span>Confirmar nueva contraseña</span>
+            <input
+              type="password"
+              value={passwordChangeForm.confirm_password}
+              onChange={(e) => setPasswordChangeForm({ ...passwordChangeForm, confirm_password: e.target.value })}
+              required
+            />
+          </label>
+        </div>
+        <div className="form-actions" style={{ marginTop: 20 }}>
+          <button type="button" className="ghost-btn" onClick={() => setShowPasswordChange(false)}>Cancelar</button>
+          <button type="submit" className="primary-btn">Actualizar contraseña</button>
+        </div>
+        {passwordChangeMsg.text ? (
+          <div
+            className={passwordChangeMsg.type === 'success' ? 'success-box' : 'error-box'}
+            role={passwordChangeMsg.type === 'success' ? 'status' : 'alert'}
+          >
+            {passwordChangeMsg.text}
+          </div>
+        ) : null}
+      </form>
+    </div>
+  );
+
   const contentMap = {
     dashboard: renderDashboard(),
     usuarios: canAccess('usuarios') ? renderUsers() : <div className="panel-card warn">No tienes permisos para ver usuarios.</div>,
@@ -1627,6 +2151,8 @@ function App() {
     mi_qr: canAccess('mi_qr') ? renderMiQr() : <div className="panel-card warn">Esta pantalla solo está disponible para residentes.</div>,
     reportes: canAccess('reportes') ? renderReportes() : <div className="panel-card warn">No tienes permisos para ver reportes.</div>,
     seguridad: canAccess('seguridad') ? renderSeguridad() : <div className="panel-card warn">No tienes permisos para seguridad.</div>,
+    auditoria: isPlatformSuperAdmin ? renderAuditoria() : <div className="panel-card warn">La auditoría es exclusiva del Super Admin.</div>,
+    password_change: renderPasswordChange(),
   };
 
   if (!session.user) {
@@ -1692,6 +2218,7 @@ function App() {
             <div className="user-box">
               <span>{session.user?.nombre || session.user?.username || 'Usuario'}</span>
               <small className="role-tag">{session.user?.rol || 'Sin rol'}</small>
+              <button className="ghost-btn" onClick={() => setShowPasswordChange(true)}>Cambiar contraseña</button>
               <button className="ghost-btn" onClick={handleLogout}>Salir</button>
             </div>
           </div>
@@ -1891,6 +2418,115 @@ function App() {
           establishmentId={session.user?.id_establecimiento}
           establishmentName={session.user?.establecimiento}
         />
+
+        {/* Cambio de contraseña */}
+        {showPasswordChange && (
+          <div className="detail-backdrop" role="presentation" onClick={() => setShowPasswordChange(false)}>
+            <section className="detail-dialog" role="dialog" aria-modal="true" aria-labelledby="password-change-title" onClick={(event) => event.stopPropagation()}>
+              <div className="section-header">
+                <div>
+                  <h3 id="password-change-title">Cambiar mi contraseña</h3>
+                  <small>Mantén tu cuenta segura con una contraseña robusta.</small>
+                </div>
+                <button className="ghost-btn" onClick={() => setShowPasswordChange(false)}>Cerrar</button>
+              </div>
+              <form className="password-change-form" onSubmit={handleChangePassword} style={{ padding: '0 22px 22px' }}>
+                <div className="field-grid" style={{ gridTemplateColumns: '1fr' }}>
+                  <label>
+                    <span>Contraseña actual</span>
+                    <input
+                      type="password"
+                      value={passwordChangeForm.current_password}
+                      onChange={(e) => setPasswordChangeForm({ ...passwordChangeForm, current_password: e.target.value })}
+                      required
+                    />
+                  </label>
+                  <label>
+                    <span>Nueva contraseña</span>
+                    <input
+                      type="password"
+                      value={passwordChangeForm.new_password}
+                      onChange={(e) => setPasswordChangeForm({ ...passwordChangeForm, new_password: e.target.value })}
+                      required
+                    />
+                    <small style={{ color: '#94a7bd', fontSize: '.75rem' }}>Mínimo 8 caracteres, 1 mayúscula, 1 minúscula, 1 número.</small>
+                  </label>
+                  <label>
+                    <span>Confirmar nueva contraseña</span>
+                    <input
+                      type="password"
+                      value={passwordChangeForm.confirm_password}
+                      onChange={(e) => setPasswordChangeForm({ ...passwordChangeForm, confirm_password: e.target.value })}
+                      required
+                    />
+                  </label>
+                </div>
+                <div className="form-actions" style={{ marginTop: 20 }}>
+                  <button type="button" className="ghost-btn" onClick={() => setShowPasswordChange(false)}>Cancelar</button>
+                  <button type="submit" className="primary-btn">Actualizar contraseña</button>
+                </div>
+                {passwordChangeMsg.text ? (
+                  <div
+                    className={passwordChangeMsg.type === 'success' ? 'success-box' : 'error-box'}
+                    role={passwordChangeMsg.type === 'success' ? 'status' : 'alert'}
+                  >
+                    {passwordChangeMsg.text}
+                  </div>
+                ) : null}
+              </form>
+            </section>
+          </div>
+        )}
+
+        {/* Eliminar recurso con contraseña */}
+        {resourceDeleteOpen && (
+          <div className="detail-backdrop" role="presentation" onClick={() => setResourceDeleteOpen(null)}>
+            <section className="detail-dialog" role="dialog" aria-modal="true" aria-labelledby="resource-delete-title" onClick={(event) => event.stopPropagation()}>
+              <div className="section-header">
+                <div>
+                  <h3 id="resource-delete-title">Eliminar recurso</h3>
+                  <small>Esta acción no se puede deshacer. Solo el Super Admin puede eliminarlo.</small>
+                </div>
+                <button className="ghost-btn" onClick={() => setResourceDeleteOpen(null)}>Cancelar</button>
+              </div>
+              <form onSubmit={handleDeleteResource} style={{ padding: '0 22px 22px' }}>
+                <p>Recurso: <strong>{resourceDeleteOpen.nombre}</strong> ({resourceDeleteOpen.clave})</p>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span>Contraseña de eliminación</span>
+                  <input
+                    type="password"
+                    value={resourceDeletePassword}
+                    onChange={(e) => setResourceDeletePassword(e.target.value)}
+                    required
+                    placeholder="Miacarol@2025"
+                  />
+                </label>
+                <div className="form-actions" style={{ marginTop: 20 }}>
+                  <button type="button" className="ghost-btn" onClick={() => setResourceDeleteOpen(null)}>Cancelar</button>
+                  <button type="submit" className="primary-btn">Eliminar recurso</button>
+                </div>
+              </form>
+            </section>
+          </div>
+        )}
+        
+        {/* Sistema de notificaciones Toast */}
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`toast-notification toast-${toast.type}`}
+            role="alert"
+            aria-live="polite"
+          >
+            <div className="toast-content">
+              <div className="toast-title">{toast.title}</div>
+              <div className="toast-message">{toast.message}</div>
+            </div>
+            <button className="toast-close" onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}>
+              ×
+            </button>
+          </div>
+        ))}
       </main>
     </div>
   );

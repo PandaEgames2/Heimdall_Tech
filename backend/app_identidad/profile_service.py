@@ -113,19 +113,26 @@ def build_profile_payload(user, perfil: Usuario | None) -> dict[str, Any]:
     access = resolve_effective_permissions(perfil, is_superadmin=is_superadmin)
     roles = profile_roles(perfil)
     establecimiento = perfil.id_establecimiento
-    features = features_for_establecimiento(establecimiento)
-    cupo = estado_cupo(establecimiento)
-    puede_invitar = bool(
-        features.get("qr")
-        and establecimiento.permite_invitaciones_residente
-        and profile_has_role(perfil, RESIDENTE_ROL_ID)
-    )
+    # Para Super Admin, no hay establecimiento anclado
+    if is_superadmin:
+        features = {"manual": True, "qr": True, "rfid": True, "lpr": True}
+        cupo = None
+        puede_invitar = False
+    else:
+        features = features_for_establecimiento(establecimiento)
+        cupo = estado_cupo(establecimiento)
+        puede_invitar = bool(
+            features.get("qr")
+            and establecimiento.permite_invitaciones_residente
+            and profile_has_role(perfil, RESIDENTE_ROL_ID)
+        )
 
     base.update(
         {
             "nombre": perfil.nombre,
             "id_usuario": perfil.id_usuario,
-            "id_establecimiento": perfil.id_establecimiento_id,
+            # Super Admin no está anclado a un establecimiento específico
+            "id_establecimiento": None if is_superadmin else perfil.id_establecimiento_id,
             "rol": perfil.id_rol.nombre if perfil.id_rol else "Sin rol",
             "rol_id": perfil.id_rol_id if perfil.id_rol else None,
             "roles_ids": profile_role_ids(perfil),
@@ -139,15 +146,16 @@ def build_profile_payload(user, perfil: Usuario | None) -> dict[str, Any]:
                 "solo_lectura": access["solo_lectura"],
             },
             "is_platform_superadmin": is_superadmin,
-            "establecimiento": establecimiento.nombre,
-            "tipo_entidad": establecimiento.tipo_entidad,
-            "tipo_entidad_etiqueta": establecimiento.get_tipo_entidad_display(),
+            # Super Admin ve "Sistema Global" en lugar de un establecimiento concreto
+            "establecimiento": "Sistema Global" if is_superadmin else establecimiento.nombre,
+            "tipo_entidad": None if is_superadmin else establecimiento.tipo_entidad,
+            "tipo_entidad_etiqueta": "" if is_superadmin else establecimiento.get_tipo_entidad_display(),
             "permite_invitaciones_residente": bool(
                 establecimiento.permite_invitaciones_residente
-            ),
-            "puede_invitar": puede_invitar,
-            "cupo": cupo,
-            "plan": {
+            ) if not is_superadmin else False,
+            "puede_invitar": False if is_superadmin else puede_invitar,
+            "cupo": None if is_superadmin else cupo,
+            "plan": None if is_superadmin else {
                 "id": establecimiento.id_plan_id,
                 "nombre": establecimiento.id_plan.nombre if establecimiento.id_plan else None,
                 "cupo_residentes": getattr(establecimiento.id_plan, "cupo_residentes", None),

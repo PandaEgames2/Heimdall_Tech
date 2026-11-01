@@ -245,7 +245,7 @@ class Command(BaseCommand):
         row = cursor.fetchone()
         if not row:
             return
-        for key in ("dashboard", "usuarios", "roles", "recursos"):
+        for key in ("dashboard", "usuarios", "roles", "recursos", "auditoría"):
             self._insert_role_resource(cursor, row[0], key)
 
     def _insert_role_resource(self, cursor, role_id: int, key: str):

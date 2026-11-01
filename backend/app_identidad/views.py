@@ -11,9 +11,9 @@ from config.permissions import IsPlatformSuperAdmin, IsPlatformSuperAdminOrRoleR
 from config.rbac import BASE_ROLE_NAMES, sync_role_permissions_cache
 from config.tenant_utils import SUPER_ADMIN_ROL_ID, get_usuario_perfil, is_platform_superadmin
 
-from .models import Recurso, Rol, RolHasRecurso, Usuario, UsuarioHasRol
+from .models import Recurso, Rol, RolHasRecurso, Usuario, UsuarioHasRol, AuditLog
 from .profile_service import build_profile_payload
-from .serializers import RecursoSerializer, RolSerializer, UsuarioSerializer
+from .serializers import RecursoSerializer, RolSerializer, UsuarioSerializer, AuditLogSerializer
 
 User = get_user_model()
 
@@ -99,7 +99,43 @@ class RecursoViewSet(viewsets.ModelViewSet):
             raise ValidationError({"detail": "Los recursos del sistema no se pueden eliminar."})
         if RolHasRecurso.objects.filter(id_recurso_id=recurso.id_recurso).exists():
             raise ValidationError({"detail": "No se puede eliminar un recurso asignado a un rol."})
+        # Validación de contraseña segura para eliminación de recursos
+        delete_password = (
+            request.headers.get("X-Resource-Delete-Password")
+            or request.data.get("delete_password")
+            or request.query_params.get("delete_password")
+        )
+        if delete_password != "Miacarol@2025":
+            raise ValidationError(
+                {"detail": "Contraseña de eliminación inválida. Contacta al Super Admin."}
+            )
         return super().destroy(request, *args, **kwargs)
+
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """Registro de auditoría: solo lectura, solo Super Admin."""
+
+    serializer_class = AuditLogSerializer
+    lookup_field = "id_auditoria"
+    permission_classes = [IsPlatformSuperAdmin]
+    pagination_class = None
+    ordering = ["-fecha"]
+
+    def get_queryset(self):
+        queryset = AuditLog.objects.select_related("id_usuario", "id_usuario__id_rol").all()
+        accion = self.request.query_params.get("accion")
+        if accion:
+            queryset = queryset.filter(accion=accion)
+        usuario_id = self.request.query_params.get("usuario")
+        if usuario_id:
+            queryset = queryset.filter(id_usuario_id=usuario_id)
+        fecha_desde = self.request.query_params.get("fecha_desde")
+        if fecha_desde:
+            queryset = queryset.filter(fecha__gte=fecha_desde)
+        fecha_hasta = self.request.query_params.get("fecha_hasta")
+        if fecha_hasta:
+            queryset = queryset.filter(fecha__lte=fecha_hasta)
+        return queryset
 
 
 class UsuarioViewSet(EstablecimientoQueryParamMixin, viewsets.ModelViewSet):

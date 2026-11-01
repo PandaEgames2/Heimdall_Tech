@@ -39,6 +39,18 @@ def _column_exists(cursor, table: str, column: str) -> bool:
     return cursor.fetchone()[0] > 0
 
 
+def _table_exists(cursor, table: str) -> bool:
+    cursor.execute(
+        """
+        SELECT COUNT(*) FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = %s
+        """,
+        [table],
+    )
+    return cursor.fetchone()[0] > 0
+
+
 def _add_column(cursor, table: str, column: str, definition: str) -> bool:
     if _column_exists(cursor, table, column):
         return False
@@ -115,8 +127,29 @@ class Command(BaseCommand):
                         [tipo, permite, establecimiento_id],
                     )
 
+            # Crear tabla de auditoría si no existe
+            if not _table_exists(cursor, "AUDIT_LOG"):
+                cursor.execute(
+                    """
+                    CREATE TABLE AUDIT_LOG (
+                        id_auditoria BIGINT NOT NULL AUTO_INCREMENT,
+                        id_usuario INT NULL,
+                        accion VARCHAR(20) NOT NULL,
+                        recurso_afectado VARCHAR(100) NULL,
+                        descripcion TEXT NULL,
+                        ip_origen VARCHAR(45) NULL,
+                        fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (id_auditoria),
+                        KEY audit_fecha_idx (fecha),
+                        KEY audit_usuario_fecha_idx (id_usuario, fecha),
+                        CONSTRAINT audit_usuario_fk FOREIGN KEY (id_usuario)
+                            REFERENCES USUARIO (id_usuario) ON DELETE SET NULL
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+                    """
+                )
+
         self.stdout.write(
             self.style.SUCCESS(
-                "Esquema de cupos y restricciones contextuales sincronizado."
+                "Esquema de cupos, restricciones contextuales y tabla de auditoría sincronizado."
             )
         )

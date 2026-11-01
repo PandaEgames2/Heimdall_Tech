@@ -446,7 +446,7 @@ button:hover {
 }
 
 .nav-btn small {
-  font-size: 0.66rem;
+  font-size: 0.82rem;
 }
 
 .workspace {
@@ -1177,7 +1177,7 @@ button:hover {
   .nav-btn small {
     overflow: hidden;
     color: inherit;
-    font-size: .84rem;
+    font-size: 0.82rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -2687,4 +2687,1271 @@ summary:focus-visible {
   .rbac-card-dark .security-item-action {
     margin-left: 54px;
   }
+}
+
+/* ==========================================================================
+   Modo oscuro profundo · Cámaras, Control de Acceso, Mi QR e Invitados
+   Acentos dorados (#d8b56d), fondos slate (#040912 / #0b132b), textos claros.
+   ========================================================================== */
+
+/* Cámaras ---------------------------------------------------------------- */
+.rbac-card-dark .lpr-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.rbac-card-dark .plate-camera {
+  border: 1px solid rgba(148, 172, 204, .18);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .018));
+  padding: 18px;
+}
+
+.rbac-card-dark .plate-camera-view {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  min-height: 360px;
+  border: 2px dashed rgba(216, 181, 109, .3);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #040912;
+  margin: 0 auto;
+}
+
+.rbac-card-dark .plate-camera-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rbac-card-dark .plate-camera-guide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a7bd;
+  font-size: .85rem;
+  letter-spacing: .05em;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.rbac-card-dark .plate-camera-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.rbac-card-dark .camera-ready {
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.rbac-card-dark .camera-ready.is-ready {
+  color: #4ce0b5;
+}
+
+.rbac-card-dark .camera-message {
+  color: #ffd8d8;
+  font-size: .85rem;
+  text-align: center;
+  margin: 10px 0;
+}
+
+.rbac-card-dark .lpr-result-card {
+  border: 1px solid rgba(148, 172, 204, .18);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .018));
+  padding: 16px;
+}
+
+.rbac-card-dark .lpr-latest-plate {
+  color: #f0d79a;
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  font-family: 'Courier New', monospace;
+}
+
+.rbac-card-dark .lpr-result-card span,
+.rbac-card-dark .lpr-result-card small {
+  color: #94a7bd;
+}
+
+.rbac-card-dark .plan-notice {
+  border-color: rgba(216, 181, 109, .26);
+  color: #f0d79a;
+  background: rgba(216, 181, 109, .08);
+}
+
+/* Control de Acceso ------------------------------------------------------ */
+.rbac-card-dark .access-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.rbac-card-dark .form-panel {
+  border: 1px solid rgba(148, 172, 204, .18);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .018));
+  padding: 18px;
+}
+
+.rbac-card-dark .field-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.rbac-card-dark .field-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rbac-card-dark .field-grid label span {
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #dfb96e;
+}
+
+.rbac-card-dark .field-grid input,
+.rbac-card-dark .field-grid select,
+.rbac-card-dark .field-grid textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid rgba(148, 172, 204, .3);
+  border-radius: 11px;
+  color: #f4f8fe;
+  background: rgba(4, 9, 18, .6);
+  font-size: .88rem;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.rbac-card-dark .field-grid input::placeholder {
+  color: #6f7d83;
+}
+
+.rbac-card-dark .field-grid input:focus,
+.rbac-card-dark .field-grid select:focus,
+.rbac-card-dark .field-grid textarea:focus {
+  border-color: rgba(216, 181, 109, .75);
+  box-shadow: 0 0 0 3px rgba(216, 181, 109, .14);
+}
+
+.rbac-card-dark .form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.rbac-card-dark .rbac-btn,
+.rbac-card-dark .primary-btn,
+.rbac-card-dark .ghost-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: .86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+.rbac-card-dark .primary-btn {
+  background: linear-gradient(135deg, #e0b66b, #d8b56d);
+  color: #08101f;
+  box-shadow: 0 8px 20px rgba(216, 181, 109, .2);
+}
+
+.rbac-card-dark .primary-btn:hover:not(:disabled) {
+  box-shadow: 0 12px 28px rgba(216, 181, 109, .3);
+  transform: translateY(-1px);
+}
+
+.rbac-card-dark .primary-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.rbac-card-dark .ghost-btn {
+  background: rgba(255, 255, 255, .06);
+  color: #c7d5e6;
+  border: 1px solid rgba(148, 172, 204, .2);
+}
+
+.rbac-card-dark .ghost-btn:hover:not(:disabled) {
+  border-color: rgba(216, 181, 109, .4);
+  color: #f0d79a;
+  background: rgba(216, 181, 109, .08);
+}
+
+.rbac-card-dark .success-box,
+.rbac-card-dark .error-box {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: .85rem;
+  margin-top: 10px;
+}
+
+.rbac-card-dark .success-box {
+  border: 1px solid rgba(76, 224, 181, .3);
+  background: rgba(76, 224, 181, .1);
+  color: #a8f0d4;
+}
+
+.rbac-card-dark .error-box {
+  border: 1px solid rgba(255, 102, 116, .3);
+  background: rgba(255, 102, 116, .1);
+  color: #ffc9c9;
+}
+
+/* Mi QR e Invitados ------------------------------------------------------ */
+.rbac-card-dark .resident-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.rbac-card-dark .resident-qr-card {
+  border: 1px solid rgba(148, 172, 204, .18);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .018));
+  padding: 22px;
+  text-align: center;
+}
+
+.rbac-card-dark .qr-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.rbac-card-dark .qr-display QRCodeSVG {
+  background: #ffffff;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.rbac-card-dark .resident-fallback-code {
+  border: 1px dashed rgba(216, 181, 109, .3);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(216, 181, 109, .06);
+  margin-top: 10px;
+}
+
+.rbac-card-dark .resident-fallback-code strong {
+  color: #f0d79a;
+  font-size: 1.2rem;
+  font-family: 'Courier New', monospace;
+  letter-spacing: .06em;
+}
+
+.rbac-card-dark .resident-fallback-code small {
+  color: #94a7bd;
+  font-size: .75rem;
+}
+
+.rbac-card-dark .empty-state {
+  color: #94a7bd;
+  font-size: .85rem;
+  margin: 20px 0;
+}
+
+.rbac-card-dark .invite-lock-note {
+  border: 1px dashed rgba(216, 181, 109, .3);
+  border-radius: 12px;
+  background: rgba(216, 181, 109, .08);
+  padding: 16px;
+  color: #f0d79a;
+}
+
+.rbac-card-dark .invite-lock-note strong {
+  color: #f4f8fe;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.rbac-card-dark .invite-lock-note p {
+  color: #c7d5e6;
+  font-size: .85rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Cambio de contraseña -------------------------------------------------- */
+.rbac-card-dark .password-change-form {
+  border: 1px solid rgba(148, 172, 204, .18);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .018));
+  padding: 22px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.rbac-card-dark .password-change-form h4 {
+  color: #f4f8fe;
+  margin: 0 0 18px;
+  font-size: 1.1rem;
+}
+
+/* Auditoría (Super Admin) ----------------------------------------------- */
+.rbac-card-dark .audit-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.rbac-card-dark .audit-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(148, 172, 204, .18);
+  border-radius: 12px;
+  background: rgba(4, 9, 18, .4);
+}
+
+.rbac-card-dark .audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .82rem;
+}
+
+.rbac-card-dark .audit-table thead th {
+  padding: 12px 14px;
+  color: #dfb96e;
+  background: rgba(216, 181, 109, .06);
+  border-bottom: 1px solid rgba(148, 172, 204, .18);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.rbac-card-dark .audit-table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(148, 172, 204, .1);
+  vertical-align: middle;
+  color: #c7d5e6;
+}
+
+.rbac-card-dark .audit-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.rbac-card-dark .audit-table tbody tr:hover {
+  background: rgba(216, 181, 109, .04);
+}
+
+.rbac-card-dark .audit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.rbac-card-dark .audit-badge.LOGIN {
+  border: 1px solid rgba(76, 224, 181, .3);
+  color: #a8f0d4;
+  background: rgba(76, 224, 181, .08);
+}
+
+.rbac-card-dark .audit-badge.LOGOUT {
+  border: 1px solid rgba(255, 180, 89, .3);
+  color: #ffd08c;
+  background: rgba(255, 180, 89, .08);
+}
+
+.rbac-card-dark .audit-badge.CREATE,
+.rbac-card-dark .audit-badge.UPDATE,
+.rbac-card-dark .audit-badge.DELETE {
+  border: 1px solid rgba(216, 181, 109, .3);
+  color: #f0d79a;
+  background: rgba(216, 181, 109, .08);
+}
+
+.rbac-card-dark .audit-badge.INVITE,
+.rbac-card-dark .audit-badge.QR_GENERATE,
+.rbac-card-dark .audit-badge.PASSWORD_CHANGE,
+.rbac-card-dark .audit-badge.ROLE_ASSIGN {
+  border: 1px solid rgba(112, 170, 214, .3);
+  color: #b9dcff;
+  background: rgba(112, 170, 214, .08);
+}
+
+.rbac-card-dark .audit-fecha {
+  font-family: 'Courier New', monospace;
+  font-size: .75rem;
+  color: #94a7bd;
+}
+
+.rbac-card-dark .audit-empty {
+  text-align: center;
+  padding: 40px;
+  color: #94a7bd;
+}
+
+.rbac-card-dark .audit-empty strong {
+  color: #f4f8fe;
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* Estadísticas de auditoría */
+.rbac-card-dark .audit-stats {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin: 16px 0;
+}
+
+.rbac-card-dark .audit-stat {
+  border: 1px solid rgba(148, 172, 204, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+}
+
+.rbac-card-dark .audit-stat span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a7bd;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.rbac-card-dark .audit-stat strong {
+  font-size: 1.5rem;
+  color: #f0d79a;
+  display: block;
+}
+
+.rbac-card-dark .audit-stat small {
+  font-size: 0.7rem;
+  color: #6f7d83;
+}
+
+/* Tabla de auditoría mejorada */
+.rbac-card-dark .audit-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(148, 172, 204, 0.1);
+  border-radius: 12px;
+  background: rgba(4, 9, 18, 0.4);
+  margin-top: 12px;
+}
+
+.rbac-card-dark .audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.rbac-card-dark .audit-table thead th {
+  padding: 12px 14px;
+  color: #dfb96e;
+  background: rgba(216, 181, 109, 0.06);
+  border-bottom: 1px solid rgba(148, 172, 204, 0.1);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.rbac-card-dark .audit-table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(148, 172, 204, 0.1);
+  vertical-align: middle;
+  color: #c7d5e6;
+}
+
+.rbac-card-dark .audit-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.rbac-card-dark .audit-table tbody tr:hover {
+  background: rgba(216, 181, 109, 0.04);
+}
+
+.rbac-card-dark .audit-user {
+  display: flex;
+  flex-direction: column;
+}
+
+.rbac-card-dark .audit-user-name {
+  font-weight: 600;
+  color: #f4f8fe;
+}
+
+.rbac-card-dark .audit-user-email {
+  font-size: 0.72rem;
+  color: #94a7bd;
+}
+
+.rbac-card-dark .audit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.rbac-card-dark .audit-badge.LOGIN {
+  border: 1px solid rgba(76, 224, 181, 0.3);
+  color: #a8f0d4;
+  background: rgba(76, 224, 181, 0.08);
+}
+
+.rbac-card-dark .audit-badge.LOGOUT {
+  border: 1px solid rgba(255, 180, 89, 0.3);
+  color: #ffd08c;
+  background: rgba(255, 180, 89, 0.08);
+}
+
+.rbac-card-dark .audit-badge.CREATE,
+.rbac-card-dark .audit-badge.UPDATE,
+.rbac-card-dark .audit-badge.DELETE {
+  border: 1px solid rgba(216, 181, 109, 0.3);
+  color: #f0d79a;
+  background: rgba(216, 181, 109, 0.08);
+}
+
+.rbac-card-dark .audit-badge.INVITE,
+.rbac-card-dark .audit-badge.QR_GENERATE,
+.rbac-card-dark .audit-badge.PASSWORD_CHANGE,
+.rbac-card-dark .audit-badge.ROLE_ASSIGN {
+  border: 1px solid rgba(112, 170, 214, 0.3);
+  color: #b9dcff;
+  background: rgba(112, 170, 214, 0.08);
+}
+
+.rbac-card-dark .audit-fecha {
+  font-family: 'Courier New', monospace;
+  font-size: 0.72rem;
+  color: #94a7bd;
+}
+
+.rbac-card-dark .audit-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: #94a7bd;
+}
+
+.rbac-card-dark .audit-empty strong {
+  color: #f4f8fe;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.rbac-card-dark .audit-empty-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  color: #6f7d83;
+}
+
+.rbac-card-dark .audit-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(216, 181, 109, 0.2);
+  border-top-color: #d8b56d;
+  border-radius: 50%;
+  animation: audit-spin 1s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes audit-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 760px) {
+  .rbac-card-dark .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rbac-card-dark .form-actions {
+    flex-direction: column;
+  }
+
+  .rbac-card-dark .audit-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rbac-card-dark .audit-toolbar > * {
+    width: 100%;
+  }
+
+  .rbac-card-dark .audit-toolbar button {
+    align-self: flex-start;
+  }
+}
+
+/* ==========================================================================
+   MODO CÁMARAS LPR · Panel profesional nivel comercial
+   Proporción cámara: 2:1 lateral, controles a la derecha
+   Colores: #0B132B fondo profundo, #0E1A2F paneles, #d8b56d oro, #4ce0b5 verde
+   ========================================================================== */
+
+/* Contenedor principal del módulo cámaras */
+.camara-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Área de video principal - 60% height */
+.video-container {
+  position: relative;
+  width: 100%;
+  height: 60%;
+  background: #040912;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Video elemento de video real */
+.lpr-video-element {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+
+/* ==========================================================================
+   OVERLAY DE DETECCIÓN IA
+   ========================================================================== */
+
+/* Bounding box alrededor de placa detectada */
+.lpr-bounding-box {
+  position: absolute;
+  border: 2px solid #4ce0b5;
+  border-radius: 8px;
+  background: rgba(76, 224, 181, 0.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+  z-index: 10;
+  transition: all 0.15s ease;
+}
+
+.lpr-bounding-box .lpr-label {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #4ce0b5;
+  color: #040912;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+/* Tarjeta flotante de procesamiento en vivo (parte superior derecha) */
+.lpr-processing-card {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(4, 9, 18, 0.85);
+  border: 1px solid rgba(216, 181, 109, 0.4);
+  border-radius: 12px;
+  padding: 16px 20px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  width: 220px;
+  z-index: 50;
+  font-size: 0.8rem;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.lpr-processing-card .lpr-plate-info {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(216, 181, 109, 0.2);
+}
+
+.lpr-processing-card .lpr-plate-info strong {
+  color: #f0d79a;
+  font-size: 1rem;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.lpr-processing-card .lpr-confidence {
+  color: #94a7bd;
+  font-size: 0.75rem;
+}
+
+.lpr-processing-card .lpr-validation-state {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(216, 181, 109, 0.2);
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.lpr-processing-card .validado {
+  color: #4ce0b5;
+}
+
+.lpr-processing-card .no-validado {
+  color: #ffd8d8;
+}
+
+/* ==========================================================================
+   CONTROLES DE CÁMARA
+   ========================================================================== */
+
+.camara-controles {
+  padding: 16px 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent);
+  border-top: 1px solid rgba(148, 172, 204, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.camera-status {
+  font-size: 0.75rem;
+  color: #94a7bd;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.camara-capturar-btn {
+  align-self: stretch;
+  min-height: 48px;
+  padding: 12px 24px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Estado de error de cámara */
+.camera-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: #ffd8d8;
+}
+
+.camera-error-state .warning-icon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 16px;
+  color: #ff6b6b;
+}
+
+.camera-error-state p {
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+/* ==========================================================================
+   PANEL LATERAL DERECHO (40% width)
+   ========================================================================== */
+
+.panel-lateral-derecho {
+  width: 40%;
+  flex-shrink: 0;
+  padding: 24px 20px;
+  overflow-y: auto;
+  background: #0E1A2F;
+  border-left: 1px solid rgba(148, 172, 204, 0.1);
+}
+
+/* Selector de cámaras */
+.selector-camaras .tarjeta-panel {
+  background: rgba(4, 9, 18, 0.6);
+  border: 1px solid rgba(148, 172, 204, 0.1);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.selector-camaras .tarjeta-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 172, 204, 0.1);
+}
+
+.selector-camaras .tarjeta-header h4 {
+  color: #f4f8fe;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.selector-camaras .tarjeta-header small {
+  color: #6f7d83;
+  font-size: 0.65rem;
+  margin: 0;
+}
+
+.selector-camaras .selector-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid rgba(148, 172, 204, 0.3);
+  border-radius: 11px;
+  color: #f4f8fe;
+  background: rgba(4, 9, 18, 0.6);
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  margin-top: 8px;
+}
+
+.selector-camaras .selector-input:focus {
+  border-color: rgba(216, 181, 109, 0.75);
+  box-shadow: 0 0 0 3px rgba(216, 181, 109, 0.14);
+}
+
+/* Área de captura */
+.area-captura .tarjeta-panel {
+  background: rgba(4, 9, 18, 0.6);
+  border: 1px solid rgba(148, 172, 204, 0.1);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.area-captura .tarjeta-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 172, 204, 0.1);
+}
+
+.area-captura .tarjeta-header h4 {
+  color: #f4f8fe;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.area-captura .tarjeta-header small {
+  color: #6f7d83;
+  font-size: 0.65rem;
+  margin: 0;
+}
+
+/* Marco de placa - verde brillante */
+.marco-placa {
+  border: 2px solid #4ce0b5;
+  border-radius: 12px;
+  padding: 20px;
+  background: rgba(76, 224, 181, 0.05);
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.marco-placa::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(76, 224, 181, 0.1), transparent);
+  pointer-events: none;
+}
+
+.tipo-placa {
+  color: #4ce0b5;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.numero-placa {
+  color: #f0d79a;
+  font-family: 'Digital-7', 'Seven Segment', 'Courier New', monospace;
+  font-size: 3rem;
+  font-weight: 400;
+  letter-spacing: 0.3em;
+  text-align: center;
+  display: block;
+  min-height: 3em;
+  line-height: 3em;
+}
+
+.texto-asistencia {
+  color: #94a7bd;
+  font-size: 0.75rem;
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Botón acción primaria grande */
+.boton-accion-grande {
+  margin: 24px 0;
+}
+
+.btn-accion-primario {
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #e0b66b, #d8b56d);
+  color: #08101f;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-accion-primario:hover:not(:disabled) {
+  box-shadow: 0 12px 28px rgba(216, 181, 109, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-accion-primario:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-accion-primario .svg-check {
+  width: 20px;
+  height: 20px;
+}
+
+/* Historial vertical de lecturas */
+.historial-lecturas .tarjeta-panel {
+  background: rgba(4, 9, 18, 0.6);
+  border: 1px solid rgba(148, 172, 204, 0.1);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.historial-lecturas .tarjeta-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 172, 204, 0.1);
+}
+
+.historial-lecturas .tarjeta-header h4 {
+  color: #f4f8fe;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.historial-lecturas .tarjeta-header small {
+  color: #6f7d83;
+  font-size: 0.65rem;
+  margin: 0;
+}
+
+.lista-lecturas {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item-lectura {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.01);
+  transition: all 0.15s ease;
+}
+
+.item-lectura:hover {
+  background: rgba(216, 181, 109, 0.05);
+}
+
+.item-lectura .hora-lectura {
+  color: #6f7d83;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  min-width: 60px;
+}
+
+.item-lectura .placa-lectura {
+  flex: 1;
+  color: #c7d5e6;
+}
+
+.item-lectura .digital-font {
+  color: #f0d79a;
+  font-family: 'Digital-7', 'Seven Segment', 'Courier New', monospace;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.item-lectura .etiqueta-estado {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.item-lectura .estado-autorizado {
+  background: rgba(76, 224, 181, 0.2);
+  color: #a8f0d4;
+}
+
+.item-lectura .estado-visitante {
+  background: rgba(255, 180, 89, 0.2);
+  color: #ffd08c;
+}
+
+.item-lectura .estado-prohibido {
+  background: rgba(255, 102, 116, 0.2);
+  color: #ffc9c9;
+}
+
+.historial-vacio {
+  text-align: center;
+  padding: 40px 20px;
+  color: #94a7bd;
+  border: 1px dashed rgba(148, 172, 204, 0.1);
+  border-radius: 12px;
+  margin-top: 20px;
+}
+
+.historial-vacio strong {
+  color: #f4f8fe;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.historial-vacio .svg-historial {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 16px;
+  color: #6f7d83;
+}
+
+/* Responsive: en pantallas pequeñas, apilar layout */
+@media (max-width: 1200px) {
+  .camara-container {
+    flex-direction: column;
+  }
+
+  .video-container {
+    height: 50%;
+  }
+
+  .panel-lateral-derecho {
+    width: 100%;
+  }
+
+  .panel-lateral-derecho .tarjeta-panel:last-child {
+    margin-top: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .camara-container {
+    flex-direction: column-reverse;
+  }
+
+  .video-container {
+    height: 40%;
+    order: 2;
+  }
+
+  .panel-lateral-derecho {
+    order: 1;
+    width: 100%;
+  }
+
+  .lpr-processing-card {
+    width: 100%;
+    right: 0;
+    left: 0;
+    margin: 10px auto;
+  }
+
+  .btn-accion-primario {
+    font-size: 0.9rem;
+    padding: 12px 20px;
+  }
+
+  .numero-placa {
+    font-size: 2rem;
+  }
+}
+
+/* ==========================================================================
+   Notificaciones Toast
+   ========================================================================== */
+
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast-notification {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  min-width: 300px;
+  max-width: 450px;
+  border-radius: 12px;
+  color: #f4f8fe;
+  font-size: 0.85rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  pointer-events: auto;
+  animation: slideInToast 0.3s ease;
+}
+
+@keyframes slideInToast {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.toast-notification.toast-error {
+  background: rgba(255, 102, 116, 0.9);
+  border-color: rgba(255, 102, 116, 0.4);
+}
+
+.toast-notification.toast-success {
+  background: rgba(76, 224, 181, 0.9);
+  border-color: rgba(76, 224, 181, 0.4);
+  color: #08101f;
+}
+
+.toast-notification.toast-info {
+  background: rgba(112, 170, 214, 0.9);
+  border-color: rgba(112, 170, 214, 0.4);
+  color: #08101f;
+}
+
+.toast-content {
+  flex: 1;
+}
+
+.toast-title {
+  font-weight: 800;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.toast-message {
+  font-size: 0.8rem;
+  opacity: 0.95;
+  line-height: 1.4;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.7;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  margin-top: -4px;
+  transition: opacity 0.15s ease;
+}
+
+.toast-close:hover {
+  opacity: 1;
+}
+
+/* Ajuste para que el toast no interfiera con el sidebar */
+.app-shell {
+  position: relative;
 }

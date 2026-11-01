@@ -120,3 +120,50 @@ class Usuario(models.Model):
 
     def __str__(self):
         return self.correo
+
+
+class AuditLog(models.Model):
+    """Registro de auditoría de acciones de usuarios en el sistema.
+
+    El Super Admin puede consultar qué hace cada usuario (admin de
+    establecimiento, supervisor, vigilante, residente/trabajador) y tener
+    una constancia de la actividad en el sistema.
+    """
+
+    class Accion(models.TextChoices):
+        LOGIN = "LOGIN", "Inicio de sesión"
+        LOGOUT = "LOGOUT", "Cierre de sesión"
+        CREATE = "CREATE", "Creación"
+        UPDATE = "UPDATE", "Actualización"
+        DELETE = "DELETE", "Eliminación"
+        INVITE = "INVITE", "Invitación de visitante"
+        QR_GENERATE = "QR_GENERATE", "Generación de QR"
+        PASSWORD_CHANGE = "PASSWORD_CHANGE", "Cambio de contraseña"
+        ROLE_ASSIGN = "ROLE_ASSIGN", "Asignación de rol"
+
+    id_auditoria = models.BigAutoField(primary_key=True, db_column="id_auditoria")
+    id_usuario = models.ForeignKey(
+        "Usuario",
+        on_delete=models.SET_NULL,
+        db_column="id_usuario",
+        related_name="audit_logs",
+        null=True,
+        blank=True,
+    )
+    accion = models.CharField(max_length=20, choices=Accion.choices)
+    recurso_afectado = models.CharField(max_length=100, blank=True, null=True)
+    descripcion = models.TextField(blank=True, null=True)
+    ip_origen = models.GenericIPAddressField(null=True, blank=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "AUDIT_LOG"
+        managed = False
+        ordering = ["-fecha"]
+        indexes = [
+            models.Index(fields=["-fecha"], name="audit_fecha_idx"),
+            models.Index(fields=["id_usuario_id", "-fecha"], name="audit_usuario_fecha_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.accion} · {self.id_usuario_id or 'sistema'} · {self.fecha}"
