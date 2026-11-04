@@ -72,7 +72,7 @@ class RecursoViewSet(viewsets.ModelViewSet):
     pagination_class = None
     search_fields = ("clave", "nombre", "descripcion", "grupo")
     ordering_fields = ("orden", "nombre", "clave")
-    permission_classes = [IsPlatformSuperAdmin]
+    permission_classes = [IsPlatformSuperAdminOrRoleReader]
 
     def get_queryset(self):
         return Recurso.objects.all().order_by("orden", "id_recurso")
@@ -117,12 +117,18 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     serializer_class = AuditLogSerializer
     lookup_field = "id_auditoria"
-    permission_classes = [IsPlatformSuperAdmin]
+    permission_classes = [IsPlatformSuperAdminOrRoleReader]
     pagination_class = None
     ordering = ["-fecha"]
 
     def get_queryset(self):
         queryset = AuditLog.objects.select_related("id_usuario", "id_usuario__id_rol").all()
+        # Filtrar por establecimiento para usuarios no-Super-Admin
+        from config.rbac import is_platform_superadmin
+        if not is_platform_superadmin(self.request.user):
+            perfil = get_usuario_perfil(self.request.user)
+            if perfil and perfil.id_establecimiento_id:
+                queryset = queryset.filter(id_usuario__id_establecimiento_id=perfil.id_establecimiento_id)
         accion = self.request.query_params.get("accion")
         if accion:
             queryset = queryset.filter(accion=accion)

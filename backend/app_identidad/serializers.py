@@ -582,14 +582,23 @@ class UsuarioSerializer(serializers.ModelSerializer):
         # Cupo comercial: sólo consume una plaza un residente activo nuevo, una
         # reactivación o un traslado a otro establecimiento. Editar nombre,
         # correo o contraseña de una plaza existente no vuelve a consumir cupo.
-        target_establishment = attrs.get("id_establecimiento") or (
-            instance.id_establecimiento if instance is not None else None
-        )
-        if target_establishment is None:
-            caller_profile = get_usuario_perfil(request_user)
-            target_establishment = (
-                caller_profile.id_establecimiento if caller_profile else None
+        # Si el usuario es Super Admin, no requiere establecimiento.
+        is_new_superadmin = (attrs.get("id_rol") or getattr(instance, "id_rol", None)) and \
+            (SUPER_ADMIN_ROL_ID in set(_user_role_ids(instance)) if instance else False) or \
+            (SUPER_ADMIN_ROL_ID in final_role_ids and not instance)
+        
+        if is_new_superadmin:
+            # Super Admin puede operar sin establecimiento (visibilidad global)
+            target_establishment = None
+        else:
+            target_establishment = attrs.get("id_establecimiento") or (
+                instance.id_establecimiento if instance is not None else None
             )
+            if target_establishment is None:
+                caller_profile = get_usuario_perfil(request_user)
+                target_establishment = (
+                    caller_profile.id_establecimiento if caller_profile else None
+                )
         will_be_resident = RESIDENTE_ROL_ID in final_role_ids
         will_be_active = attrs.get("estado", getattr(instance, "estado", True)) is not False
         was_active_resident = bool(

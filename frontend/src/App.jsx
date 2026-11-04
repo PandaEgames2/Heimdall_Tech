@@ -507,7 +507,7 @@ function App() {
   }, [lprCameraReady, lprProcessing]);
 
   const loadAuditData = useCallback(async () => {
-    if (!isPlatformSuperAdmin) return;
+    if (!isPlatformSuperAdmin && !canAccess('auditoria')) return;
     setAuditLoading(true);
     try {
       const query = new URLSearchParams();
@@ -527,7 +527,7 @@ function App() {
     } finally {
       setAuditLoading(false);
     }
-  }, [isPlatformSuperAdmin, auditFilters.accion, auditFilters.usuario, auditFilters.fecha_desde, auditFilters.fecha_hasta]);
+  }, [isPlatformSuperAdmin, canAccess('auditoria'), auditFilters.accion, auditFilters.usuario, auditFilters.fecha_desde, auditFilters.fecha_hasta]);
 
   useEffect(() => {
     if (activeTab === 'auditoria') {
@@ -2144,14 +2144,14 @@ function App() {
     dashboard: renderDashboard(),
     usuarios: canAccess('usuarios') ? renderUsers() : <div className="panel-card warn">No tienes permisos para ver usuarios.</div>,
     roles: canAccess('roles') ? renderRoles() : <div className="panel-card warn">No tienes permisos para ver roles.</div>,
-    recursos: isPlatformSuperAdmin && canAccess('recursos') ? renderRecursos() : <div className="panel-card warn">La administración de recursos es exclusiva del Super Admin.</div>,
+    recursos: canAccess('recursos') ? renderRecursos() : <div className="panel-card warn">No tienes permisos para ver recursos.</div>,
     catalogos: canAccess('catalogos') ? renderCatalogos() : <div className="panel-card warn">No tienes permisos para ver catálogo.</div>,
     camaras: canAccess('camaras') ? renderCamaras() : <div className="panel-card warn">No tienes permisos para ver cámaras.</div>,
     accesos: canAccess('accesos') ? renderAccesos() : <div className="panel-card warn">No tienes permisos para registrar accesos.</div>,
     mi_qr: canAccess('mi_qr') ? renderMiQr() : <div className="panel-card warn">Esta pantalla solo está disponible para residentes.</div>,
     reportes: canAccess('reportes') ? renderReportes() : <div className="panel-card warn">No tienes permisos para ver reportes.</div>,
     seguridad: canAccess('seguridad') ? renderSeguridad() : <div className="panel-card warn">No tienes permisos para seguridad.</div>,
-    auditoria: isPlatformSuperAdmin ? renderAuditoria() : <div className="panel-card warn">La auditoría es exclusiva del Super Admin.</div>,
+    auditoria: canAccess('auditoria') ? renderAuditoria() : <div className="panel-card warn">No tienes permisos para ver auditoría.</div>,
     password_change: renderPasswordChange(),
   };
 
@@ -2226,7 +2226,7 @@ function App() {
 
         <section className="content-area">
           {error ? <div className="error-box" role="alert">{error}</div> : null}
-          {!session.user?.id_establecimiento ? (
+          {!isPlatformSuperAdmin && !session.user?.id_establecimiento ? (
             <div className="panel-card warn" role="alert">Esta cuenta no tiene un establecimiento asociado. Contacta al administrador.</div>
           ) : null}
           {contentMap[activeTab] || (activeMenuItem ? renderCustomModule(activeMenuItem) : contentMap.dashboard)}

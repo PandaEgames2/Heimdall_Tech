@@ -80,10 +80,18 @@ MODULE_PERMISSIONS = (
         "description": "Panel de seguridad, auditoría y estado del sistema.",
     },
     {
+        "key": "auditoria",
+        "label": "Auditoría",
+        "group": "Sistema",
+        "description": "Registro de actividad de usuarios y constancia de acciones en el sistema.",
+    },
+    {
+        # Alias legado: antiguos módulos creados con clave 'auditoría' todavía en localStorage/BD
         "key": "auditoría",
         "label": "Auditoría",
         "group": "Sistema",
         "description": "Registro de actividad de usuarios y constancia de acciones en el sistema.",
+        "legacy": True,
     },
 )
 
@@ -175,6 +183,7 @@ LEGACY_PERMISSION_ALIASES = {
     "qr_residente": "mi_qr",
     "invitaciones_visitante": "mi_qr",
     "qr": "mi_qr",
+    "auditoría": "auditoria",
 }
 
 MENU_DEFINITIONS = (
@@ -247,6 +256,13 @@ MENU_DEFINITIONS = (
         "group": "Sistema",
         "icon": "seguridad",
         "superadmin_only": False,
+    },
+    {
+        "key": "auditoria",
+        "label": "Auditoría",
+        "group": "Sistema",
+        "icon": "auditoria",
+        "superadmin_only": True,
     },
     {
         "key": "auditoría",
