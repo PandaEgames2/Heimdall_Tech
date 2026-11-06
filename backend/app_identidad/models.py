@@ -155,6 +155,12 @@ class AuditLog(models.Model):
     descripcion = models.TextField(blank=True, null=True)
     ip_origen = models.GenericIPAddressField(null=True, blank=True)
     fecha = models.DateTimeField(auto_now_add=True)
+    origen_permiso = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        help_text="Módulo o acción que originó el evento (ej. 'recursos', 'roles', 'excepcion').",
+    )
 
     class Meta:
         db_table = "AUDIT_LOG"

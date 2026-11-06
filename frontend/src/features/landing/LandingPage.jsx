@@ -131,7 +131,7 @@ export default function LandingPage({ onNavigate = navigate }) {
         <div className="landing-hero-copy">
           <span className="landing-eyebrow">
             <span className="landing-pulse" aria-hidden="true" />
-            Control vehicular inteligente
+            Gestión inteligente de acceso y trazabilidad
           </span>
 
           <h1>
@@ -140,11 +140,11 @@ export default function LandingPage({ onNavigate = navigate }) {
           </h1>
 
           <p className="landing-lead">
-            Heimdall Tech reúne el control de acceso vehicular y peatonal de tu
-            establecimiento en una sola plataforma. Valida placas, QR y RFID, registra
-            cada ingreso y salida y organiza el acceso de tu equipo con una jerarquía
-            de permisos inteligente. La operación continúa offline y se sincroniza
-            cuando vuelve la red.
+            Heimdall Tech reúne el control de acceso vehicular y peatonal, y la gestión
+            de roles y permisos de tu establecimiento en una sola plataforma. Valida placas,
+            QR y RFID, registra cada ingreso y salida, y organiza el acceso de tu equipo con
+            una jerarquía de permisos inteligente y trazabilidad completa. La operación continúa
+            offline y se sincroniza cuando vuelve la red.
           </p>
 
           <div className="landing-actions">

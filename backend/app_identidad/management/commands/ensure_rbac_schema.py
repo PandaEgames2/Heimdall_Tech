@@ -114,6 +114,7 @@ class Command(BaseCommand):
             role_count = self._backfill_role_resources(cursor)
             user_count = self._backfill_user_roles(cursor)
             self._ensure_superadmin_minimum(cursor)
+            self._normalize_legacy_keys(cursor)
             self._sync_role_cache()
 
             resource_total = self._count(cursor, "RECURSO")
@@ -245,8 +246,80 @@ class Command(BaseCommand):
         row = cursor.fetchone()
         if not row:
             return
-        for key in ("dashboard", "usuarios", "roles", "recursos", "auditoría"):
+        for key in ("dashboard", "usuarios", "roles", "recursos", "auditoria"):
             self._insert_role_resource(cursor, row[0], key)
+
+    def _normalize_legacy_keys(self, cursor):
+        """Normaliza claves legacy (con tilde) a claves canónicas sin tilde.
+
+        - Convierte 'auditoría' → 'auditoria' en RECURSO y ROL_HAS_RECURSO.
+        - Limpia permisos duplicados o ambiguos en ROL.permisos y USUARIO.permisos_excepciones.
+        """
+        from app_identidad.models import Recurso, RolHasRecurso, Usuario
+
+        # Verificar que las tablas existan
+        try:
+            cursor.execute("SELECT 1 FROM RECURSO LIMIT 1")
+        except Exception:
+            return
+
+        # 1. Normalizar claves en RECURSO (solo la primera fila, usando ON DUPLICATE KEY UPDATE)
+        cursor.execute("""
+            SELECT id_recurso, clave FROM RECURSO WHERE clave = 'auditoría' LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            cursor.execute("""
+                UPDATE RECURSO SET clave = 'auditoria' WHERE id_recurso = %s
+            """, [row[0]])
+
+        # 2. Normalizar ROL_HAS_RECURSO: convertir 'auditoría' → 'auditoria'
+        try:
+            cursor.execute("""
+                SELECT id_rol_id, id_recurso_id FROM RolHasRecurso
+                WHERE id_recurso_id IN (
+                    SELECT id_recurso FROM RECURSO WHERE clave = 'auditoría'
+                )
+            """)
+        except Exception:
+            rhr_rows = []
+        for rol_id, rec_id in rhr_rows:
+            cursor.execute("""
+                UPDATE RolHasRecurso SET id_recurso_id = (
+                    SELECT id_recurso FROM RECURSO WHERE clave = 'auditoria' LIMIT 1
+                )
+                WHERE id_rol_id = %s AND id_recurso_id = %s
+            """, [rol_id, rec_id])
+
+        # 3. Normalizar permisos almacenados en ROL.permisos (JSON)
+        try:
+            cursor.execute("SELECT id_rol, permisos FROM ROL WHERE permisos IS NOT NULL")
+        except Exception:
+            return
+        for rol_id, perms_json in cursor.fetchall():
+            if isinstance(perms_json, str):
+                perms = json.loads(perms_json)
+                if 'auditoría' in perms:
+                    perms = ['auditoria' if p == 'auditoría' else p for p in perms]
+                    cursor.execute(
+                        "UPDATE ROL SET permisos = %s WHERE id_rol = %s",
+                        [json.dumps(perms, ensure_ascii=False), rol_id],
+                    )
+
+        # 4. Normalizar permisos_excepciones en USUARIO
+        try:
+            cursor.execute("SELECT id_usuario, permisos_excepciones FROM USUARIO WHERE permisos_excepciones IS NOT NULL")
+        except Exception:
+            return
+        for user_id, exc_json in cursor.fetchall():
+            if isinstance(exc_json, str):
+                exc = json.loads(exc_json)
+                if 'auditoría' in exc:
+                    exc = {('auditoria' if k == 'auditoría' else k): v for k, v in exc.items()}
+                    cursor.execute(
+                        "UPDATE USUARIO SET permisos_excepciones = %s WHERE id_usuario = %s",
+                        [json.dumps(exc, ensure_ascii=False), user_id],
+                    )
 
     def _insert_role_resource(self, cursor, role_id: int, key: str):
         cursor.execute(

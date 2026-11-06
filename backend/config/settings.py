@@ -216,6 +216,15 @@ CORS_ALLOWED_ORIGINS = _csv_env(
     ),
 )
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "authorization",
+    "content-type",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+    "x-resource-delete-password",
+]
 CORS_ALLOWED_ORIGIN_REGEXES = []
 if DEBUG:
     CORS_ALLOWED_ORIGIN_REGEXES = [

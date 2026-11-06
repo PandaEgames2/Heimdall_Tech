@@ -7,11 +7,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from config.mixins import EstablecimientoQueryParamMixin
-from config.permissions import IsPlatformSuperAdmin, IsPlatformSuperAdminOrRoleReader, IsTenantAdmin
+from config.permissions import IsPlatformSuperAdmin, IsPlatformSuperAdminOrRoleReader, IsTenantAdmin, CanManageRBAC
 from config.rbac import BASE_ROLE_NAMES, sync_role_permissions_cache
 from config.tenant_utils import SUPER_ADMIN_ROL_ID, get_usuario_perfil, is_platform_superadmin
 
 from .models import Recurso, Rol, RolHasRecurso, Usuario, UsuarioHasRol, AuditLog
+from .auth_views import log_permission_grant, log_rbac_action
 from .profile_service import build_profile_payload
 from .serializers import RecursoSerializer, RolSerializer, UsuarioSerializer, AuditLogSerializer
 
@@ -46,13 +47,35 @@ class RolViewSet(viewsets.ModelViewSet):
     pagination_class = None
     search_fields = ("nombre", "descripcion")
     ordering_fields = ("nombre", "id_rol")
-    permission_classes = [IsPlatformSuperAdminOrRoleReader]
+    permission_classes = [CanManageRBAC]
 
     def get_queryset(self):
         return (
             Rol.objects.all()
             .prefetch_related("recursos_asignados", "usuario_asignaciones")
             .order_by("id_rol")
+        )
+
+    def perform_create(self, serializer):
+        instancia = serializer.save()
+        log_rbac_action(
+            request=self.request,
+            action=AuditLog.Accion.CREATE,
+            modulo="roles",
+            recurso_id=instancia.id_rol,
+            recurso_nombre=instancia.nombre,
+            descripcion=f"Creación de rol {instancia.nombre}",
+        )
+
+    def perform_update(self, serializer):
+        instancia = serializer.save()
+        log_rbac_action(
+            request=self.request,
+            action=AuditLog.Accion.UPDATE,
+            modulo="roles",
+            recurso_id=instancia.id_rol,
+            recurso_nombre=instancia.nombre,
+            descripcion=f"Actualización de rol {instancia.nombre}",
         )
 
     def destroy(self, request, *args, **kwargs):
@@ -63,7 +86,19 @@ class RolViewSet(viewsets.ModelViewSet):
             raise ValidationError({"detail": "No se puede eliminar un rol que tiene usuarios asignados."})
         if role.usuarios.exists():
             raise ValidationError({"detail": "No se puede eliminar un rol que tiene usuarios asignados."})
-        return super().destroy(request, *args, **kwargs)
+        # Registrar eliminación de rol antes de borrar
+        role_id = role.id_rol
+        role_nombre = role.nombre
+        response = super().destroy(request, *args, **kwargs)
+        log_rbac_action(
+            request=request,
+            action=AuditLog.Accion.DELETE,
+            modulo="roles",
+            recurso_id=role_id,
+            recurso_nombre=role_nombre,
+            descripcion=f"Eliminación del rol {role_nombre}",
+        )
+        return response
 
 
 class RecursoViewSet(viewsets.ModelViewSet):
@@ -72,10 +107,21 @@ class RecursoViewSet(viewsets.ModelViewSet):
     pagination_class = None
     search_fields = ("clave", "nombre", "descripcion", "grupo")
     ordering_fields = ("orden", "nombre", "clave")
-    permission_classes = [IsPlatformSuperAdminOrRoleReader]
+    permission_classes = [CanManageRBAC]
 
     def get_queryset(self):
         return Recurso.objects.all().order_by("orden", "id_recurso")
+
+    def perform_create(self, serializer):
+        instancia = serializer.save()
+        log_rbac_action(
+            request=self.request,
+            action=AuditLog.Accion.CREATE,
+            modulo="recursos",
+            recurso_id=instancia.id_recurso,
+            recurso_nombre=instancia.nombre,
+            descripcion=f"Creación de recurso {instancia.nombre} (clave: {instancia.clave})",
+        )
 
     def perform_update(self, serializer):
         instance = serializer.instance
@@ -92,6 +138,15 @@ class RecursoViewSet(viewsets.ModelViewSet):
         )
         for role_id in role_ids:
             sync_role_permissions_cache(role_id)
+        # Registrar actualización de recurso
+        log_rbac_action(
+            request=self.request,
+            action=AuditLog.Accion.UPDATE,
+            modulo="recursos",
+            recurso_id=recurso.id_recurso,
+            recurso_nombre=recurso.nombre,
+            descripcion=f"Actualización de recurso {recurso.nombre} (clave: {recurso.clave})",
+        )
 
     def destroy(self, request, *args, **kwargs):
         recurso = self.get_object()
@@ -109,22 +164,38 @@ class RecursoViewSet(viewsets.ModelViewSet):
             raise ValidationError(
                 {"detail": "Contraseña de eliminación inválida. Contacta al Super Admin."}
             )
-        return super().destroy(request, *args, **kwargs)
+        # Registrar eliminación de recurso antes de borrar
+        recurso_id = recurso.id_recurso
+        recurso_nombre = recurso.nombre
+        response = super().destroy(request, *args, **kwargs)
+        log_rbac_action(
+            request=request,
+            action=AuditLog.Accion.DELETE,
+            modulo="recursos",
+            recurso_id=recurso_id,
+            recurso_nombre=recurso_nombre,
+            descripcion=f"Eliminación del recurso {recurso_nombre} (clave: {recurso.clave})",
+        )
+        return response
 
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
-    """Registro de auditoría: solo lectura, solo Super Admin."""
+    """Registro de auditoría: solo lectura para quien tenga el módulo 'auditoria'.
+
+    Super Admin ve todo el historial. Usuarios no-Super-Admin ven solo
+    los registros de su propio establecimiento y solo con métodos seguros (GET).
+    """
 
     serializer_class = AuditLogSerializer
     lookup_field = "id_auditoria"
-    permission_classes = [IsPlatformSuperAdminOrRoleReader]
+    permission_classes = [IsTenantAdmin]
     pagination_class = None
     ordering = ["-fecha"]
 
     def get_queryset(self):
         queryset = AuditLog.objects.select_related("id_usuario", "id_usuario__id_rol").all()
         # Filtrar por establecimiento para usuarios no-Super-Admin
-        from config.rbac import is_platform_superadmin
+        from config.tenant_utils import is_platform_superadmin
         if not is_platform_superadmin(self.request.user):
             perfil = get_usuario_perfil(self.request.user)
             if perfil and perfil.id_establecimiento_id:
@@ -212,7 +283,15 @@ class UsuarioViewSet(EstablecimientoQueryParamMixin, viewsets.ModelViewSet):
 
         serializer = self.get_serializer(data=payload)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        instance = serializer.save()
+        # Registrar concesión de excepciones de permisos por Super Admin
+        if is_platform_superadmin(request.user):
+            log_permission_grant(
+                usuario=instance,
+                modulo=serializer.validated_data.get("id_rol", instance.id_rol.nombre) or "desconocido",
+                otorgado_por=request.user,
+                descripcion=f"Concesión de excepciones de permisos para usuario {instance.correo}",
+            )
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -224,7 +303,15 @@ class UsuarioViewSet(EstablecimientoQueryParamMixin, viewsets.ModelViewSet):
             payload["id_establecimiento"] = instance.id_establecimiento_id
         serializer = self.get_serializer(instance, data=payload, partial=partial)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        instance = serializer.save()
+        # Registrar modificación de excepciones de permisos
+        if is_platform_superadmin(request.user):
+            log_permission_grant(
+                usuario=instance,
+                modulo=instance.id_rol.nombre or "desconocido",
+                otorgado_por=request.user,
+                descripcion=f"Modificación de excepciones de permisos para usuario {instance.correo}",
+            )
         return Response(serializer.data)
 
     def destroy(self, request, *args, **kwargs):

@@ -5,7 +5,7 @@ import RoleModal from './RoleModal';
 
 const PAGE_SIZE = 10;
 
-export default function RoleManagement({ catalogo = [], isSuperAdmin = false, onRolesChanged }) {
+export default function RoleManagement({ catalogo = [], isSuperAdmin = false, onRolesChanged, canEditRole = false, canDeleteRole = false }) {
   const [roles, setRoles] = useState([]);
   const [resourceCatalog, setResourceCatalog] = useState(catalogo);
   const [loading, setLoading] = useState(true);
@@ -40,10 +40,9 @@ export default function RoleManagement({ catalogo = [], isSuperAdmin = false, on
   }, [catalogo]);
 
   useEffect(() => {
-    if (!isSuperAdmin) return undefined;
     const timer = window.setTimeout(loadRoles, 0);
     return () => window.clearTimeout(timer);
-  }, [isSuperAdmin, loadRoles]);
+  }, [loadRoles]);
 
   const filteredRoles = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -101,17 +100,6 @@ export default function RoleManagement({ catalogo = [], isSuperAdmin = false, on
     }
   };
 
-  if (!isSuperAdmin) {
-    return (
-      <div className="rbac-card rbac-card-dark">
-        <div className="rbac-empty">
-          <strong>Acceso restringido</strong>
-          <p>La gestión de roles globales es exclusiva del Super Admin.</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="rbac-card rbac-card-dark">
       <header className="rbac-card-header">
@@ -121,10 +109,12 @@ export default function RoleManagement({ catalogo = [], isSuperAdmin = false, on
           <p>Administra los cinco roles base y crea roles personalizados. Los recursos se guardan en ROL_HAS_RECURSO y las excepciones individuales se aplican encima.</p>
         </div>
         <div className="rbac-header-actions">
-          <span className="rbac-badge rbac-badge-gold">Solo Super Admin</span>
-          <button type="button" className="rbac-btn rbac-btn-gold" onClick={() => setCreatingRole(true)}>
-            + Nuevo Rol
-          </button>
+          <span className="rbac-badge">{isSuperAdmin ? 'Super Admin' : canEditRole ? 'Edición' : 'Lectura'} </span>
+          {canEditRole ? (
+            <button type="button" className="rbac-btn rbac-btn-gold" onClick={() => setCreatingRole(true)}>
+              + Nuevo Rol
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -205,24 +195,30 @@ export default function RoleManagement({ catalogo = [], isSuperAdmin = false, on
                     </span>
                   </td>
                   <td>
-                    <div className="rbac-row-actions">
-                      <button type="button" className="rbac-btn rbac-btn-ghost rbac-btn-small" onClick={() => setSelectedRole(role)}>
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className="rbac-btn rbac-btn-danger rbac-btn-small"
-                        onClick={() => requestDelete(role)}
-                        disabled={locked}
-                        title={role.es_sistema
-                          ? 'Los roles base no se pueden eliminar'
-                          : role.usuarios_count > 0
-                            ? 'Reasigna a los usuarios antes de eliminar el rol'
-                            : 'Eliminar rol'}
-                      >
-                        Eliminar
-                      </button>
-                    </div>
+                    {canEditRole ? (
+                      <div className="rbac-row-actions">
+                        <button type="button" className="rbac-btn rbac-btn-ghost rbac-btn-small" onClick={() => setSelectedRole(role)}>
+                          Editar
+                        </button>
+                      </div>
+                    ) : null}
+                    {canDeleteRole ? (
+                      <div className="rbac-row-actions">
+                        <button
+                          type="button"
+                          className="rbac-btn rbac-btn-danger rbac-btn-small"
+                          onClick={() => requestDelete(role)}
+                          disabled={locked}
+                          title={role.es_sistema
+                            ? 'Los roles base no se pueden eliminar'
+                            : role.usuarios_count > 0
+                              ? 'Reasigna a los usuarios antes de eliminar el rol'
+                              : 'Eliminar rol'}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    ) : null}
                   </td>
                 </tr>
               );

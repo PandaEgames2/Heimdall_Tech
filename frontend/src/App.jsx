@@ -339,6 +339,10 @@ function App() {
     [session.user?.menu],
   );
   const canAccess = (key) => effectivePermissions.includes(key) || menuKeys.has(key);
+  const canEditModule = (module) =>
+    canAccess(module) && Boolean(session.user?.acciones?.puede_editar) && !session.user?.acciones?.solo_lectura;
+  const canDeleteModule = (module) =>
+    canAccess(module) && Boolean(session.user?.acciones?.puede_eliminar) && !session.user?.acciones?.solo_lectura;
   const hasFeature = (feature) => Boolean(isPlatformSuperAdmin || session.user?.funcionalidades?.[feature]);
 
   useEffect(() => {
@@ -507,7 +511,7 @@ function App() {
   }, [lprCameraReady, lprProcessing]);
 
   const loadAuditData = useCallback(async () => {
-    if (!isPlatformSuperAdmin && !canAccess('auditoria')) return;
+    if (!isPlatformSuperAdmin && !effectivePermissions.includes('auditoria') && !menuKeys.has('auditoria')) return;
     setAuditLoading(true);
     try {
       const query = new URLSearchParams();
@@ -527,7 +531,7 @@ function App() {
     } finally {
       setAuditLoading(false);
     }
-  }, [isPlatformSuperAdmin, canAccess('auditoria'), auditFilters.accion, auditFilters.usuario, auditFilters.fecha_desde, auditFilters.fecha_hasta]);
+  }, [isPlatformSuperAdmin, effectivePermissions, menuKeys, auditFilters.accion, auditFilters.usuario, auditFilters.fecha_desde, auditFilters.fecha_hasta]);
 
   useEffect(() => {
     if (activeTab === 'auditoria') {
@@ -1239,6 +1243,8 @@ function App() {
       catalogo={session.user?.catalogo_permisos || []}
       isSuperAdmin={isPlatformSuperAdmin}
       onRolesChanged={refreshProfile}
+      canEditRole={canEditModule('roles')}
+      canDeleteRole={canDeleteModule('roles')}
     />
   );
 
@@ -1246,6 +1252,8 @@ function App() {
     <ResourceManagement
       isSuperAdmin={isPlatformSuperAdmin}
       onResourcesChanged={refreshProfile}
+      canEditModule={canEditModule('recursos')}
+      canDeleteModule={canDeleteModule('recursos')}
     />
   );
 
@@ -2210,7 +2218,7 @@ function App() {
             <button type="button" className="mobile-menu-toggle" aria-label={mobileMenuOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'} aria-expanded={mobileMenuOpen} aria-controls="primary-navigation" onClick={() => setMobileMenuOpen((open) => !open)}>
               <span /><span /><span />
             </button>
-            <div className="product-lockup"><strong>HEIMDALL TECH</strong><small>CONTROL Y TRAZABILIDAD VEHICULAR</small></div>
+            <div className="product-lockup"><strong>HEIMDALL TECH</strong><small>Gestión inteligente de acceso y trazabilidad</small></div>
             <div className="status-pill">{offlineMode ? 'Modo offline' : 'Online'}</div>
           </div>
 

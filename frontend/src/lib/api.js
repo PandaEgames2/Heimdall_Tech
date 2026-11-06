@@ -78,6 +78,9 @@ export const apiRequest = async (input, options = {}, retry = true) => {
   if (options.body && !headers['Content-Type'] && !(options.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
   }
+  // Headers personalizados (p.ej. X-Resource-Delete-Password) requieren que el
+  // backend los incluya en CORS_ALLOW_HEADERS; ya están definidos en settings.py.
+  // No agregar Content-Type por defecto en DELETE para evitar preflight innecesario.
 
   const response = await window.fetch(url, {
     ...options,

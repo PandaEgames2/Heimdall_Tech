@@ -358,6 +358,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
             "descripcion",
             "ip_origen",
             "fecha",
+            "origen_permiso",
         )
         read_only_fields = fields
 

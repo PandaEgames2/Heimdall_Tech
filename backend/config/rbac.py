@@ -85,15 +85,7 @@ MODULE_PERMISSIONS = (
         "group": "Sistema",
         "description": "Registro de actividad de usuarios y constancia de acciones en el sistema.",
     },
-    {
-        # Alias legado: antiguos módulos creados con clave 'auditoría' todavía en localStorage/BD
-        "key": "auditoría",
-        "label": "Auditoría",
-        "group": "Sistema",
-        "description": "Registro de actividad de usuarios y constancia de acciones en el sistema.",
-        "legacy": True,
-    },
-)
+    )
 
 ACTION_PERMISSIONS = (
     {
@@ -227,7 +219,7 @@ MENU_DEFINITIONS = (
         "label": "Roles y permisos",
         "group": "Administración",
         "icon": "roles",
-        "superadmin_only": True,
+        "superadmin_only": False,
     },
     {
         "key": "recursos",
@@ -256,20 +248,6 @@ MENU_DEFINITIONS = (
         "group": "Sistema",
         "icon": "seguridad",
         "superadmin_only": False,
-    },
-    {
-        "key": "auditoria",
-        "label": "Auditoría",
-        "group": "Sistema",
-        "icon": "auditoria",
-        "superadmin_only": True,
-    },
-    {
-        "key": "auditoría",
-        "label": "Auditoría",
-        "group": "Sistema",
-        "icon": "auditoría",
-        "superadmin_only": True,
     },
 )
 
@@ -348,6 +326,8 @@ def valid_permission_keys() -> list[str]:
     resources = _active_resources()
     if resources:
         keys = [resource.clave for resource in resources]
+        # Normalizar alias para que "auditoría" y "auditoria" sean equivalentes
+        keys = [LEGACY_PERMISSION_ALIASES.get(k, k) for k in keys]
         # El catálogo estático siempre es válido aunque un recurso del sistema
         # se haya desactivado por error.
         for key in PERMISSION_KEYS:
@@ -377,8 +357,11 @@ def _bridge_permissions(role_ids: Iterable[int]) -> dict[int, list[str]] | None:
 
     mapping: dict[int, list[str]] = {role_id: [] for role_id in ids}
     for role_id, clave, orden in sorted(rows, key=lambda item: (item[2] or 0, item[1])):
-        if clave and clave not in mapping[role_id]:
-            mapping[role_id].append(clave)
+        if clave:
+            # Normalizar alias legacy (ej. auditoría → auditoria)
+            clave_norm = LEGACY_PERMISSION_ALIASES.get(clave.strip(), clave.strip())
+            if clave_norm and clave_norm not in mapping[role_id]:
+                mapping[role_id].append(clave_norm)
     return mapping
 
 
@@ -516,7 +499,8 @@ def resolve_effective_permissions(perfil, is_superadmin: bool = False) -> dict[s
     - Las excepciones del usuario siempre sobreescriben el permiso del rol.
     - Un Super Admin conserva acceso total a los módulos de administración y a
       las acciones de escritura; puede limitar módulos opcionales desde su rol.
-    - ``solo_lectura=True`` prevalece sobre ``puede_editar`` y ``puede_eliminar``.
+    - ``solo_lectura`` se evalúa al final: si el usuario tiene excepción explícita
+      ``solo_lectura: false``, se desactiva aunque el rol lo tenga.
     """
 
     roles = profile_roles(perfil)
@@ -552,7 +536,13 @@ def resolve_effective_permissions(perfil, is_superadmin: bool = False) -> dict[s
             "solo_lectura": False,
         }
 
+    # Evaluar solo_lectura al final: si hay excepción explícita solo_lectura=false, se respeta
     solo_lectura = "solo_lectura" in permissions
+    # Si el usuario tiene excepción explícita desactivando solo_lectura, prevalece
+    if "solo_lectura" in overrides and not _as_bool(overrides.get("solo_lectura")):
+        solo_lectura = False
+        permissions.discard("solo_lectura")
+    
     if solo_lectura:
         permissions.discard("puede_editar")
         permissions.discard("puede_eliminar")
@@ -612,17 +602,84 @@ def _custom_menu_items(allowed: set[str]) -> list[dict[str, Any]]:
     return items
 
 
-def build_menu(
-    permissions: Iterable[str],
-    funcionalidades: dict[str, bool] | None,
-    is_superadmin: bool = False,
-) -> list[dict[str, Any]]:
-    allowed = set(permissions)
-    features = funcionalidades or {}
+# Mapeo de iconos por clave (fallback para recursos del sistema sin icono en BD)
+MODULE_ICONS = {
+    "dashboard": "dashboard",
+    "accesos": "accesos",
+    "camaras": "camaras",
+    "mi_qr": "mi_qr",
+    "usuarios": "usuarios",
+    "roles": "roles",
+    "recursos": "recursos",
+    "catalogos": "catalogos",
+    "reportes": "reportes",
+    "seguridad": "seguridad",
+    "auditoria": "seguridad",
+}
+
+
+def _get_module_icon(clave: str) -> str:
+    """Obtiene el icono para un módulo por su clave."""
+    return MODULE_ICONS.get(clave, "catalogos")
+
+
+def _build_menu_from_db(allowed: set[str], features: dict[str, bool], is_superadmin: bool) -> list[dict[str, Any]]:
+    """Construye el menú leyendo los módulos desde la tabla Recurso."""
+    try:
+        from app_identidad.models import Recurso
+
+        # Obtener todos los módulos activos ordenados
+        modulos = list(
+            Recurso.objects.filter(tipo=Recurso.Tipo.MODULO, estado=True)
+            .order_by("orden", "id_recurso")
+        )
+    except Exception:
+        # Si la tabla no existe o hay error, usar definiciones estáticas como fallback
+        return _build_menu_from_static(allowed, features, is_superadmin)
+
     menu: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+
+    for modulo in modulos:
+        if modulo.clave not in allowed:
+            continue
+        if modulo.clave in seen_keys:
+            continue
+        seen_keys.add(modulo.clave)
+
+        locked_by_plan = bool(
+            modulo.clave == "camaras"
+            and not is_superadmin
+            and not features.get("lpr")
+        )
+
+        menu.append(
+            {
+                "key": modulo.clave,
+                "label": modulo.nombre,
+                "group": modulo.grupo or "General",
+                "icon": _get_module_icon(modulo.clave),
+                "visible": True,
+                "locked_by_plan": locked_by_plan,
+                "superadmin_only": False,
+                "description": modulo.descripcion or "",
+                "custom": not modulo.es_sistema,
+            }
+        )
+
+    return menu
+
+
+def _build_menu_from_static(allowed: set[str], features: dict[str, bool], is_superadmin: bool) -> list[dict[str, Any]]:
+    """Fallback: construye el menú desde MENU_DEFINITIONS estáticas."""
+    menu: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
     for item in MENU_DEFINITIONS:
         if item["key"] not in allowed:
             continue
+        if item["key"] in seen_keys:
+            continue
+        seen_keys.add(item["key"])
         locked_by_plan = bool(
             item["key"] == "camaras"
             and not is_superadmin
@@ -639,7 +696,18 @@ def build_menu(
                 "superadmin_only": item["superadmin_only"],
             }
         )
-    menu.extend(_custom_menu_items(allowed))
+    return menu
+
+
+def build_menu(
+    permissions: Iterable[str],
+    funcionalidades: dict[str, bool] | None,
+    is_superadmin: bool = False,
+) -> list[dict[str, Any]]:
+    allowed = set(permissions)
+    features = funcionalidades or {}
+    # Priorizar base de datos; si falla, usar definiciones estáticas
+    menu = _build_menu_from_db(allowed, features, is_superadmin)
     return menu
 
 
@@ -664,7 +732,7 @@ def catalogo_permisos() -> list[dict[str, Any]]:
         return [
             {
                 "id_recurso": resource.id_recurso,
-                "key": resource.clave,
+                "key": LEGACY_PERMISSION_ALIASES.get(resource.clave, resource.clave),
                 "label": resource.nombre,
                 "group": resource.grupo or "General",
                 "description": resource.descripcion or "",
@@ -676,7 +744,7 @@ def catalogo_permisos() -> list[dict[str, Any]]:
         ]
     return [
         {
-            "key": item["key"],
+            "key": LEGACY_PERMISSION_ALIASES.get(item["key"], item["key"]),
             "label": item["label"],
             "group": item["group"],
             "description": item["description"],

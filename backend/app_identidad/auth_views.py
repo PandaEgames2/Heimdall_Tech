@@ -56,7 +56,7 @@ def _get_client_ip(request) -> str | None:
     return request.META.get("REMOTE_ADDR")
 
 
-def _audit_log(action, usuario, recurso_afectado=None, descripcion=None, request=None):
+def _audit_log(action, usuario, recurso_afectado=None, descripcion=None, request=None, origen_permiso=None):
     ip = _get_client_ip(request) if request else None
     AuditLog.objects.create(
         id_usuario=usuario,
@@ -64,6 +64,52 @@ def _audit_log(action, usuario, recurso_afectado=None, descripcion=None, request
         recurso_afectado=recurso_afectado,
         descripcion=descripcion,
         ip_origen=ip,
+        origen_permiso=origen_permiso,
+    )
+
+
+def log_rbac_action(request, action, modulo, recurso_id, recurso_nombre, descripcion=None):
+    """
+    Registra una acción de RBAC (crear, actualizar, eliminar rol/recurso).
+    
+    Args:
+        request: Request HTTP para obtener IP y usuario autenticado
+        action: AuditLog.Accion (CREATE, UPDATE, DELETE)
+        modulo: 'roles' o 'recursos'
+        recurso_id: ID del rol/recurso afectado
+        recurso_nombre: Nombre del rol/recurso afectado
+        descripcion: Descripción opcional
+    """
+    from config.tenant_utils import get_usuario_perfil
+    otorgante_perfil = get_usuario_perfil(request.user)
+    if otorgante_perfil is None:
+        return
+    
+    _audit_log(
+        action,
+        otorgante_perfil,
+        recurso_afectado=f"{modulo}:{recurso_id}",
+        descripcion=descripcion or f"{action.label} de {modulo[:-1]} '{recurso_nombre}' (ID: {recurso_id})",
+        request=request,
+        origen_permiso=modulo,
+    )
+
+
+def log_permission_grant(usuario, modulo, otorgado_por=None, descripcion=None):
+    """Registra la concesión o revocación de un permiso de módulo (excepciones de usuario).
+
+    Args:
+        usuario: Usuario cuya excepción se está modificando.
+        modulo: Clave del módulo (ej. 'recursos', 'roles', 'auditoria').
+        otorgado_por: Usuario que realizó el cambio (Super Admin), o None.
+        descripcion: Texto descriptivo del cambio.
+    """
+    _audit_log(
+        AuditLog.Accion.ROLE_ASSIGN,
+        usuario,
+        recurso_afectado=modulo,
+        descripcion=descripcion or f"Permiso de módulo {modulo} {'otorgado' if otorgado_por else 'revocado'}",
+        origen_permiso="excepcion",
     )
 
 

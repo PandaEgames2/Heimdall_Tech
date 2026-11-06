@@ -14,7 +14,7 @@ const normalizeResources = (payload) => {
   }));
 };
 
-export default function ResourceManagement({ isSuperAdmin = false, onResourcesChanged }) {
+export default function ResourceManagement({ onResourcesChanged, canEditModule = false, canDeleteModule = false }) {
   const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -41,10 +41,9 @@ export default function ResourceManagement({ isSuperAdmin = false, onResourcesCh
   }, []);
 
   useEffect(() => {
-    if (!isSuperAdmin) return undefined;
     const timer = window.setTimeout(loadResources, 0);
     return () => window.clearTimeout(timer);
-  }, [isSuperAdmin, loadResources]);
+  }, [loadResources]);
 
   const filteredResources = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -70,11 +69,12 @@ export default function ResourceManagement({ isSuperAdmin = false, onResourcesCh
   const actionCount = resources.filter((resource) => resource.tipo === 'accion').length;
   const assignedCount = resources.filter((resource) => resource.roles_count > 0).length;
   const systemCount = resources.filter((resource) => resource.es_sistema).length;
+  const readOnlyBadge = canEditModule ? '' : '(lectura)';
 
   const resetPage = () => setPage(1);
 
-  const handleSaved = () => {
-    loadResources();
+  const handleSaved = async () => {
+    await loadResources();
     onResourcesChanged?.();
   };
 
@@ -104,17 +104,6 @@ export default function ResourceManagement({ isSuperAdmin = false, onResourcesCh
     }
   };
 
-  if (!isSuperAdmin) {
-    return (
-      <div className="rbac-card rbac-card-dark">
-        <div className="rbac-empty">
-          <strong>Acceso restringido</strong>
-          <p>La administración del catálogo de recursos es exclusiva del Super Admin.</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="rbac-card rbac-card-dark">
       <header className="rbac-card-header">
@@ -124,17 +113,19 @@ export default function ResourceManagement({ isSuperAdmin = false, onResourcesCh
           <p>Administra los módulos y las acciones que pueden asignarse a los roles. Las claves del sistema están protegidas para no romper sesiones activas.</p>
         </div>
         <div className="rbac-header-actions">
-          <span className="rbac-badge rbac-badge-gold">Solo Super Admin</span>
-          <button type="button" className="rbac-btn rbac-btn-gold" onClick={() => setModalState({ resource: null })}>
-            + Nuevo recurso
-          </button>
+          <span className="rbac-badge">{canEditModule ? 'Edición' : canDeleteModule ? 'Con edición' : 'Lectura'} </span>
+          {canEditModule ? (
+            <button type="button" className="rbac-btn rbac-btn-gold" onClick={() => setModalState({ resource: null })}>
+              + Nuevo recurso
+            </button>
+          ) : null}
         </div>
       </header>
 
       <div className="rbac-stats">
         <div className="rbac-stat"><span>Total</span><strong>{resources.length}</strong><small>en el catálogo</small></div>
-        <div className="rbac-stat"><span>Módulos</span><strong>{moduleCount}</strong><small>navegación y pantallas</small></div>
-        <div className="rbac-stat"><span>Acciones</span><strong>{actionCount}</strong><small>políticas de escritura</small></div>
+        <div className="rbac-stat"><span>Módulos</span><strong>{moduleCount}</strong><small>navegación y pantallas{readOnlyBadge}</small></div>
+        <div className="rbac-stat"><span>Acciones</span><strong>{actionCount}</strong><small>políticas de escritura{readOnlyBadge}</small></div>
         <div className="rbac-stat"><span>Asignados</span><strong>{assignedCount}</strong><small>{systemCount} protegidos por sistema</small></div>
       </div>
 
@@ -179,8 +170,7 @@ export default function ResourceManagement({ isSuperAdmin = false, onResourcesCh
               <th>Grupo</th>
               <th>Tipo</th>
               <th>Estado</th>
-              <th>Roles</th>
-              <th className="rbac-table-actions-col">Acciones</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -211,29 +201,32 @@ export default function ResourceManagement({ isSuperAdmin = false, onResourcesCh
                     </span>
                   </td>
                   <td>
-                    {resource.roles_count > 0
-                      ? <span className="rbac-badge rbac-badge-gold">{resource.roles_count} rol(es)</span>
-                      : <span className="rbac-muted">Sin asignar</span>}
-                  </td>
-                  <td>
-                    <div className="rbac-row-actions">
-                      <button type="button" className="rbac-btn rbac-btn-ghost rbac-btn-small" onClick={() => setModalState({ resource })}>
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className="rbac-btn rbac-btn-danger rbac-btn-small"
-                        onClick={() => requestDelete(resource)}
-                        disabled={locked}
-                        title={resource.es_sistema
-                          ? 'Los recursos del sistema no se pueden eliminar'
-                          : resource.roles_count > 0
-                            ? 'Quita el recurso de todos los roles antes de eliminarlo'
-                            : 'Eliminar recurso'}
-                      >
-                        Eliminar
-                      </button>
-                    </div>
+                    {canEditModule ? (
+                      <div className="rbac-row-actions">
+                        <button type="button" className="rbac-btn rbac-btn-ghost rbac-btn-small" onClick={() => setModalState({ resource })}>
+                          Editar
+                        </button>
+                        {canDeleteModule && !locked ? (
+                          <button
+                            type="button"
+                            className="rbac-btn rbac-btn-danger rbac-btn-small"
+                            onClick={() => requestDelete(resource)}
+                            disabled={locked}
+                            title={resource.es_sistema
+                              ? 'Los recursos del sistema no se pueden eliminar'
+                              : resource.roles_count > 0
+                                ? 'Quita el recurso de todos los roles antes de eliminarlo'
+                                : 'Eliminar recurso'}
+                          >
+                            Eliminar
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="rbac-row-actions">
+                        <span className="rbac-muted">Solo lectura</span>
+                      </div>
+                    )}
                   </td>
                 </tr>
               );

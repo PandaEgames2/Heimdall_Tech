@@ -24,6 +24,8 @@ def _module_for_view(view, profile=None, request=None):
             return "roles"
         if view_name == "RecursoViewSet":
             return "recursos"
+        if view_name == "AuditLogViewSet":
+            return "auditoria"
     if module_name.endswith("app_empresas.views"):
         return "catalogos"
     if module_name.endswith("app_inteligencia.views"):
@@ -196,3 +198,75 @@ class HasLprFeature(BasePermission):
             return True
         perfil = get_usuario_perfil(request.user)
         return bool(perfil and features_for_establecimiento(perfil.id_establecimiento).get("lpr"))
+
+
+class CanViewAuditLog(BasePermission):
+    """Permite lectura de auditoría a Super Admin o usuarios con el módulo 'auditoria'.
+
+    Escrituras (POST/PUT/PATCH/DELETE) siempre son denegadas para non-Super-Admin.
+    """
+
+    message = "No tiene permiso para ver el registro de auditoría."
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if is_platform_superadmin(request.user):
+            return True
+        if request.method not in SAFE_METHODS:
+            return False
+        _, access = _access_for(request)
+        return "auditoria" in access["permisos"]
+
+
+class CanManageRBAC(BasePermission):
+    """
+    Permiso para gestión de Roles y Recursos (RBAC).
+    
+    - Lectura: requiere el módulo correspondiente ('roles' o 'recursos') en permisos_efectivos
+    - Escritura (POST/PUT/PATCH): requiere el módulo + puede_editar=True y solo_lectura=False
+    - Eliminación (DELETE): requiere el módulo + puede_eliminar=True y solo_lectura=False
+    - Super Admin: acceso total sin restricciones
+    """
+    
+    message = "No tiene permisos suficientes para esta operación de RBAC."
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        
+        # Super Admin siempre tiene acceso total
+        if is_platform_superadmin(request.user):
+            return True
+        
+        perfil, access = _access_for(request)
+        if perfil is None:
+            return False
+        
+        # Determinar el módulo requerido según la vista
+        view_name = view.__class__.__name__
+        if view_name == "RolViewSet":
+            required_module = "roles"
+        elif view_name == "RecursoViewSet":
+            required_module = "recursos"
+        else:
+            required_module = _module_for_view(view, perfil, request)
+        
+        if required_module is None or required_module not in access["permisos"]:
+            return False
+        
+        # Para métodos seguros (GET, HEAD, OPTIONS), solo se requiere el módulo
+        if request.method in SAFE_METHODS:
+            return True
+        
+        # Para escrituras, verificar flags de acción
+        if access.get("solo_lectura"):
+            return False
+        
+        if request.method == "DELETE":
+            return bool(access.get("puede_eliminar"))
+        
+        if request.method in ("POST", "PUT", "PATCH"):
+            return bool(access.get("puede_editar"))
+        
+        return False
